@@ -1,0 +1,75 @@
+<CoalescingWidget>
+  <Eq
+    label="Efficiency is the bytes the warp asked for divided by 32 bytes times the number of sectors fetched"
+    tex="\eta = \frac{32 \times s_e}{32\ \text{B} \times \htmlClass{hl-sectors}{N_{\text{sectors}}}}"
+  />
+</CoalescingWidget>
+
+<Layer kind="concept">
+
+A warp's load instruction carries 32 addresses, one per lane. The memory system does not fetch 32 separate words: "global memory is accessed via 32-byte memory transactions", and the warp's request is **coalesced** into as many 32-byte **sectors** as its addresses touch (CUDA Programming Guide §2.3.4.1). Caches keep sectors in 128-byte lines of four (Nsight Compute Profiling Guide, "sector").
+
+- **Consecutive 4-byte words** (stride 1): 32 lanes × 4 bytes = 128 bytes = exactly four sectors. Everything fetched is used: 100%. This is the default in the animation.
+- **A stride of 8 or more words** (32 bytes or more): every lane lands in its own sector. The warp fetches 32 × 32 = 1,024 bytes to use 128, the guide's 12.5%.
+- **A misaligned start** (offset 4): the same 128 bytes straddle a sector boundary, so five sectors and two lines: 80%.
+- **Wider elements** (8 or 16 bytes per lane, such as `double` or `float4`) still use every byte at stride 1, and need fewer instructions for the same data.
+- **Stride 0**: every lane reads the same word; one sector serves the whole warp.
+
+Watch the memory panel as the lanes step through: at stride 1 lanes 0–7 share sector 0 and only every eighth lane opens a new one; at stride 8 every lane opens a new sector and the filled words are islands in mostly empty sectors. That empty space is HBM bandwidth spent on nothing.
+
+The usual culprit is a two-dimensional array walked the wrong way. In row-major storage, consecutive `threadIdx.x` should index consecutive columns; if they index rows, the stride is the row length and every lane gets its own sector. A matrix transpose has to do one of the two, which is why it stages a tile through shared memory ([chapter 5](/learn/05-bank-conflicts)).
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The model counts sectors per warp request, which is what the guide's rule describes. It does not model L1 hits across requests or the number of cycles (wavefronts, in Nsight Compute's terms) a request spends in the load/store unit.
+
+</Callout>
+
+<Layer kind="maths">
+
+Lane $i$ of the warp reads $s_e$ bytes starting at byte $a_i = o + i\,d\,s_e$, for start offset $o$ and stride $d$ elements. It touches sectors
+
+$$
+\left\lfloor \frac{a_i}{32} \right\rfloor \ \text{to}\ \left\lfloor \frac{a_i + s_e - 1}{32} \right\rfloor,
+$$
+
+and the warp fetches the union of them, $N_{\text{sectors}}$ sectors. It asked for $32\,s_e$ bytes and the memory moved $32\,N_{\text{sectors}}$, so
+
+$$
+\eta = \frac{32\,s_e}{32\,N_{\text{sectors}}} = \frac{s_e}{N_{\text{sectors}}}.
+$$
+
+With aligned 4-byte words, $N_{\text{sectors}} = \lceil 32 d \cdot 4 / 32 \rceil = 4d$ up to $d = 8$, then 32: the efficiency falls as $1/d$ until every lane has its own sector.
+
+</Layer>
+
+<Layer kind="code">
+
+The model's sector count, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts):
+
+```ts
+const addr = offset + lane * stride * elemBytes;
+const first = idiv(addr, sector);
+const last = idiv(addr + elemBytes - 1, sector);
+```
+
+And the pattern it describes, in CUDA. This kernel is **illustrative and not compiled by this site's CI** (no GPU there); it follows the guide's matrix examples:
+
+```cuda
+// row-major a[rows][cols]: consecutive threads read consecutive columns
+float good = a[row * cols + threadIdx.x];   // stride 1: coalesced
+// consecutive threads read consecutive rows: stride = cols
+float bad  = a[threadIdx.x * cols + col];    // a sector per lane
+```
+
+</Layer>
+
+<Callout kind="deeper">
+
+- CUDA series: [Global memory](https://brendanjameslynskey.github.io/CUDA_04_Memory_Hierarchy/#slide-02) and [the memory access pattern cheat sheet](https://brendanjameslynskey.github.io/CUDA_04_Memory_Hierarchy/#slide-08).
+- NVIDIA GPU series: [L2 cache, the GPU-wide backstop](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-04).
+- NVIDIA, CUDA Programming Guide: [coalesced global memory access](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#coalesced-global-memory-access); Nsight Compute [Profiling Guide](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html) (terminology: sector).
+
+</Callout>

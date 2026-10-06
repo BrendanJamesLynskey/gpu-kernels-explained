@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+/coverage/
+playwright-report/
+test-results/
+.playwright/
+
+# IDE
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+
+
+
+# Misc
+*.swp
+.turbo/
+
+# Python virtualenv for the reference model and data scripts.
+.venv/
+__pycache__/
+.pytest_cache/
+
+.vercel
+
+# Lighthouse CI output
+.lighthouseci/

@@ -1,0 +1,91 @@
+<HierarchyWidget>
+  <Eq
+    label="Kernel time is the largest of the compute time and the time each memory level needs for its bytes"
+    tex="T = \max\left(\htmlClass{hl-compute}{\frac{F}{P}},\; \htmlClass{hl-reg}{\frac{B_{\text{reg}}}{W_{\text{reg}}}},\; \htmlClass{hl-smem}{\frac{B_{\text{smem}}}{W_{\text{smem}}}},\; \htmlClass{hl-l2}{\frac{B_{\text{L2}}}{W_{\text{L2}}}},\; \htmlClass{hl-hbm}{\frac{B_{\text{HBM}}}{W_{\text{HBM}}}}\right)"
+  />
+</HierarchyWidget>
+
+<Layer kind="concept">
+
+A GPU keeps data at four levels, and each level is a trade: the closer it sits to the arithmetic, the faster and the smaller it is. **Registers** hold each thread's working values. **Shared memory** is a scratchpad on each streaming multiprocessor (SM), shared by the threads of a block. The **L2 cache** is shared by every SM. **HBM**, the stacked DRAM beside the die, holds everything else.
+
+On the A100 the four levels deliver, in turn, <V of="a100.bw.reg" fmt="rate" />, <V of="a100.bw.smem" fmt="rate" />, <V of="a100.bw.l2" fmt="rate" /> and <V of="a100.bw.hbm" fmt="rate" />. That is a factor of about <V of="a100.ridge_fp32" fmt="num" /> between the rate the FP32 units can do arithmetic and the rate HBM can feed them, in flops per byte: a kernel that does less work than that on each byte it fetches will wait on memory.
+
+The animation runs three kernels through the model. The pipes are drawn to scale, so the HBM pipe is a thread beside the register pipe. Packets move at the rate each level is actually used:
+
+- **Vector add** reads two numbers and writes one for every addition. HBM is the bottleneck: the run takes <V of="a100.kernels.vecadd.total" fmt="time" /> on the A100, and the ALUs are busy <V of="a100.kernels.vecadd.compute_util" fmt="pct" /> of it.
+- **GEMM with 16×16 tiles** stages blocks of A and B in shared memory and reuses each value 16 times, so HBM is no longer the limit; but every multiply-add now reads two values from shared memory, and shared memory becomes the bottleneck (<V of="a100.kernels.gemm16.total" fmt="time" />).
+- **GEMM with 128×128 tiles and 8×8 results per thread** keeps operands in registers and reuses each shared-memory value 8 times. On the A100 the ALUs are now the limit (<V of="a100.kernels.gemm128.total" fmt="time" />, <V of="a100.kernels.gemm128.compute_util" fmt="pct" /> busy). Switch to the H100: its SM has twice the FP32 units of the A100's but the same 32 banks of shared memory, so the same kernel is just shared-memory bound there.
+
+Each optimisation in a GPU kernel moves the bottleneck up this ladder. The chapters that follow are about how.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The model is an **illustrative** hierarchical roofline, not a cycle-accurate simulator: every level works in parallel at its peak bandwidth, and the kernel takes as long as the slowest. Caches are idealised (a GEMM's matrices either fit in L2 or every load misses it), latency is ignored, and register bandwidth is defined as what the FP32 units consume at peak (6 bytes per flop). The peaks are sourced; see [the GPU presets](/gpus).
+
+</Callout>
+
+<Layer kind="maths">
+
+For a kernel that performs $F$ floating-point operations and moves $B_\ell$ bytes at level $\ell$, a level with bandwidth $W_\ell$ needs $B_\ell / W_\ell$ seconds on its own, and the ALUs need $F / P$. If all of them overlap perfectly, the kernel takes the largest:
+
+$$
+T = \max\left(\frac{F}{P},\ \max_\ell \frac{B_\ell}{W_\ell}\right), \qquad \text{busy fraction of level } \ell = \frac{B_\ell / W_\ell}{T}.
+$$
+
+The bandwidths come from the preset's sourced figures:
+
+- shared memory: 32 banks, each 4 bytes per clock per SM (CUDA Programming Guide §2.3.4.2), so $W_{\text{smem}} = N_{\text{SM}} \times 32 \times 4 \times f$, which is <V of="a100.bw.smem" fmt="rate" /> for 108 SMs at 1410 MHz;
+- L2: 5120 bytes per clock on the A100 (its whitepaper, p. 35), so <V of="a100.bw.l2" fmt="rate" />;
+- HBM: the datasheet bandwidth, <V of="a100.bw.hbm" fmt="rate" />;
+- registers: three 4-byte operands per fused multiply-add (2 flops), so $W_{\text{reg}} = 6P$.
+
+For a GEMM $C = AB$ with $A$ of size $M \times K$ and $B$ of size $K \times N$, tiled into $b_M \times b_N$ blocks with $t_M \times t_N$ results per thread, the model counts
+
+$$
+B_{\text{L2}} = 4\left(MK\frac{N}{b_N} + KN\frac{M}{b_M}\right) + 4MN, \qquad
+B_{\text{smem}} = \underbrace{4\left(MK\frac{N}{b_N} + KN\frac{M}{b_M}\right)}_{\text{tiles written}} + \underbrace{4K\frac{MN}{t_M t_N}(t_M + t_N)}_{\text{operands read}} .
+$$
+
+Bigger block tiles cut the global traffic; more results per thread cut the shared-memory traffic.
+
+</Layer>
+
+<Layer kind="code">
+
+The model's kernel timing, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts) (the Python reference in `reference/gpu_model.py` is the same, line for line, and the unit tests require identical results):
+
+```ts
+const compute = t.flops / p.peak_fp32;
+let total = compute;
+let bound: Bound = "compute";
+for (const lv of LEVELS) {
+  if (times[lv] > total) {
+    total = times[lv];
+    bound = lv;
+  }
+}
+```
+
+</Layer>
+
+## Capacity against speed
+
+| Level         | Size on the A100    | Bandwidth (model)                  | Latency (measured, cycles)         |
+| ------------- | ------------------- | ---------------------------------- | ---------------------------------- |
+| Registers     | 256 KB per SM       | <V of="a100.bw.reg" fmt="rate" />  | —                                  |
+| Shared memory | up to 164 KB per SM | <V of="a100.bw.smem" fmt="rate" /> | <V of="a100.lat_smem" fmt="num" /> |
+| L2 cache      | 40 MB               | <V of="a100.bw.l2" fmt="rate" />   | <V of="a100.lat_l2" fmt="num" />   |
+| HBM           | 40 GB               | <V of="a100.bw.hbm" fmt="rate" />  | <V of="a100.lat_hbm" fmt="num" />  |
+
+Sizes are from NVIDIA's A100 whitepaper (Tables 4 and 5); latencies were measured on an A100 PCIe by Luo et al. ([arXiv 2402.13499](https://arxiv.org/abs/2402.13499), Table IV). Latency is why a GPU keeps many warps resident: while one waits hundreds of cycles for HBM, others compute ([chapter 6](/learn/06-occupancy)).
+
+<Callout kind="deeper">
+
+- NVIDIA GPU series: [Memory Hierarchy](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-01) ("The Hierarchy in One Picture"), [the bandwidth ladder](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-09) and [HBM channels and pseudo-channels](https://brendanjameslynskey.github.io/NVIDIA_GPU_23_HBM_Internals/#slide-03).
+- CUDA series: [Memory Hierarchy](https://brendanjameslynskey.github.io/CUDA_04_Memory_Hierarchy/#slide-01) and [the tiling pattern](https://brendanjameslynskey.github.io/CUDA_04_Memory_Hierarchy/#slide-04).
+- NVIDIA, [A100 Tensor Core GPU Architecture](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf) (whitepaper).
+
+</Callout>

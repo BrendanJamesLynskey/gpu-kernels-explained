@@ -1,0 +1,201 @@
+/*
+ * Global styles.
+ *
+ * Copied from transformer-explainer's src/app/globals.css (Tailwind
+ * utilities inline; repeated patterns defined once here as @layer
+ * components). Added for this site: the `.mdx-content` rules at the end,
+ * because the chapters use headings, lists and tables, and neither site
+ * loads @tailwindcss/typography.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Match the system colour scheme by default; the user can override via
+   * `next-themes` once the theme toggle ships in Phase 3. */
+  :root {
+    color-scheme: light dark;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-100;
+  }
+
+  /* Code blocks scroll sideways on narrow screens rather than widening the
+   * page. (The `prose` classes on the lesson pages come from no plugin, so
+   * nothing else sets this.) */
+  pre {
+    @apply overflow-x-auto;
+  }
+}
+
+/* Display maths (KaTeX, rendered on the server for the Maths layer) scrolls
+ * sideways on narrow screens too. Deliberately outside `@layer`: the class
+ * only appears in generated HTML, so Tailwind would tree-shake it from a
+ * layer. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+/* Long file paths and identifiers in inline code may break anywhere rather
+ * than widen the page at 390 px (this site's addition; outside `@layer`
+ * for the same reason as above). */
+.mdx-content code {
+  overflow-wrap: anywhere;
+}
+
+@layer components {
+  /* The default focus ring used by every interactive widget — keyboard users
+   * always get a visible focus indicator (SPEC §11). */
+  .focus-ring {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-950;
+  }
+
+  /* Three-layer toggle visibility (SPEC §6.1). The `<LayerToggle>` client
+   * component writes `data-layer-{kind}="on|off"` onto `<html>`; the
+   * matching `<Layer kind="…">` blocks fade out via the rules below. */
+  html[data-layer-concept="off"] .te-layer[data-layer="concept"] {
+    display: none;
+  }
+  html[data-layer-maths="off"] .te-layer[data-layer="maths"] {
+    display: none;
+  }
+  html[data-layer-code="off"] .te-layer[data-layer="code"] {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* SPEC §11 — honour the OS setting. We collapse animations and CSS
+   * transitions to ~0; D3 viz components also pick this up via the
+   * matchMedia query (see useReducedMotion). Smooth scrolling is dropped
+   * too — the comments + progress trackers fire on scroll, but the user
+   * controls the trigger, not us. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Long-form chapter text (this site's addition). Headings, lists, links,
+ * tables and inline code written in the MDX. MDX output carries no class
+ * attribute, so `:not([class])` keeps these rules off the components'
+ * own markup, and `:not(figure *)` off the interactives. */
+@layer components {
+  .mdx-content p:not([class]):not(figure *) {
+    @apply my-4 leading-7;
+  }
+  .mdx-content h2:not([class]):not(figure *) {
+    @apply mb-3 mt-10 text-xl font-semibold tracking-tight;
+  }
+  .mdx-content h3:not([class]):not(figure *) {
+    @apply mb-2 mt-8 text-lg font-semibold;
+  }
+  .mdx-content ul:not([class]):not(figure *) {
+    @apply my-4 list-disc space-y-1 pl-6;
+  }
+  .mdx-content ol:not([class]):not(figure *) {
+    @apply my-4 list-decimal space-y-1 pl-6;
+  }
+  .mdx-content a:not([class]):not(figure *) {
+    @apply rounded text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent dark:text-indigo-300;
+  }
+  .mdx-content :not(pre) > code:not(figure *) {
+    @apply rounded bg-neutral-100 px-1 py-0.5 font-mono text-[0.85em] dark:bg-neutral-800;
+  }
+  .mdx-content pre:not([class]):not(figure *) {
+    @apply my-4 rounded-lg bg-neutral-100 p-4 text-sm leading-6 dark:bg-neutral-900;
+  }
+  .mdx-content table:not([class]):not(figure *) {
+    @apply text-sm;
+  }
+  .mdx-content th:not([class]):not(figure *) {
+    @apply border-b border-neutral-300 px-3 py-1.5 text-left font-semibold dark:border-neutral-700;
+  }
+  .mdx-content td:not([class]):not(figure *) {
+    @apply border-b border-neutral-200 px-3 py-1.5 align-top dark:border-neutral-800;
+  }
+  .mdx-content blockquote:not([class]):not(figure *) {
+    @apply my-4 border-l-4 border-neutral-300 pl-4 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300;
+  }
+}
+
+/* Callouts hold short MDX; keep their paragraphs and lists tight. */
+@layer components {
+  .mdx-content .callout-body p {
+    @apply my-1;
+  }
+  .mdx-content .callout-body ul {
+    @apply my-1;
+  }
+}
+
+/* Animation equations (this site's addition): every highlightable term
+ * carries its level's colour as an underline, and the term the animation
+ * is on gets a tinted background. Outside @layer: the classes only appear
+ * in KaTeX output. Colours: src/lib/viz/palette.ts (Okabe-Ito). */
+.eq-panel .katex-display {
+  margin: 0.25rem 0;
+}
+.eq-panel [class*="hl-"] {
+  border-bottom: 2px solid transparent;
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: background-color 0.15s;
+}
+.eq-panel .hl-reg {
+  border-color: #e69f00;
+}
+.eq-panel .hl-smem {
+  border-color: #009e73;
+}
+.eq-panel .hl-l2 {
+  border-color: #56b4e9;
+}
+.eq-panel .hl-hbm {
+  border-color: #cc79a7;
+}
+.eq-panel .hl-compute,
+.eq-panel .hl-peak {
+  border-color: #e69f00;
+}
+.eq-panel[data-hl~="reg"] .hl-reg,
+.eq-panel[data-hl~="smem"] .hl-smem,
+.eq-panel[data-hl~="l2"] .hl-l2,
+.eq-panel[data-hl~="hbm"] .hl-hbm,
+.eq-panel[data-hl~="compute"] .hl-compute,
+.eq-panel[data-hl~="peak"] .hl-peak,
+.eq-panel[data-hl~="bw"] .hl-bw,
+.eq-panel[data-hl~="ai"] .hl-ai,
+.eq-panel[data-hl~="warps"] .hl-warps,
+.eq-panel[data-hl~="regs"] .hl-regs,
+.eq-panel[data-hl~="blocks"] .hl-blocks,
+.eq-panel[data-hl~="active"] .hl-active,
+.eq-panel[data-hl~="issued"] .hl-issued,
+.eq-panel[data-hl~="sectors"] .hl-sectors,
+.eq-panel[data-hl~="degree"] .hl-degree {
+  background-color: rgb(0 114 178 / 0.18);
+  border-color: #0072b2;
+}
+.eq-panel[data-hl~="smem"] .hl-smem {
+  background-color: rgb(0 158 115 / 0.2);
+}
+
+/* Phones: shrink the animation equations so they fit the panel. */
+@media (max-width: 639px) {
+  .eq-panel .katex-display > .katex {
+    font-size: 0.82em;
+  }
+}

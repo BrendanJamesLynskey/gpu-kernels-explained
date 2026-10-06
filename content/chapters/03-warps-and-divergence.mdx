@@ -1,0 +1,75 @@
+<SimtWidget>
+  <Eq
+    label="SIMT efficiency is the active lanes summed over every issued instruction, divided by 32 times the number of issues"
+    tex="\eta = \frac{\htmlClass{hl-active}{\sum_{s=1}^{S} a_s}}{32 \times \htmlClass{hl-issued}{S}}"
+  />
+</SimtWidget>
+
+<Layer kind="concept">
+
+A GPU runs threads in groups of 32 called **warps**. A warp issues one instruction at a time for all of its threads, which the CUDA Programming Guide calls **SIMT**, single instruction, multiple threads: "full efficiency is realized when all 32 threads of a warp agree on their execution path."
+
+When they do not agree, at an `if` whose condition differs between lanes, the warp **diverges**: "the warp executes each branch path taken, disabling threads that are not on that path." In the animation, each row is one issued instruction. With `i < 8`, lanes 0–7 run the if-path while lanes 8–31 sit masked off (hatched); then lanes 8–31 run the else-path while 0–7 wait; then all 32 carry on together. Both paths cost the whole warp time.
+
+Try the conditions:
+
+- **`i < k`** splits the warp into two runs of lanes. Make $k$ a multiple of 32 and the whole warp agrees: no divergence, and the untaken path is never issued.
+- **`i % k == 0`** spreads the active lanes out. With $k = 2$ the even and odd lanes take turns: half the warp idles at every branch instruction.
+- **`x[i] < k`** branches on data, here 32 pseudo-random values from 0 to 99 drawn by the model. Data-dependent branches are the usual source of divergence, and how much it costs depends on the data.
+- **`uniform`** branches on `blockIdx.x`, the same for every thread of a block: the warp never diverges, whatever the paths' lengths.
+
+Divergence happens only _within_ a warp: "different warps execute independently." So a branch that splits threads at warp boundaries, multiples of 32, costs nothing extra.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The model issues the if-path, then the else-path, then reconverges after the `if`, as the classic stack-based SIMT hardware did. Since compute capability 7.0 (Volta), **independent thread scheduling** keeps a program counter per thread, and "threads can now diverge and reconverge at sub-warp granularity" (CUDA Programming Guide). The order of the two paths and the point of reconvergence are then up to the scheduler, but the cost of a divergent branch, both paths issued with lanes masked, is the same.
+
+</Callout>
+
+<Layer kind="maths">
+
+If the warp issues $S$ instructions and $a_s$ lanes are active for instruction $s$, the fraction of the warp's issue slots doing useful work is
+
+$$
+\eta = \frac{\sum_s a_s}{32\,S}.
+$$
+
+For a branch taken by $m$ of 32 lanes, with $L_A$ instructions on the if-path, $L_B$ on the else-path and $L_0$ outside it, a divergent warp issues $S = L_0 + L_A + L_B$ instructions for
+
+$$
+\eta = \frac{32 L_0 + m L_A + (32 - m) L_B}{32 (L_0 + L_A + L_B)} ,
+$$
+
+while a warp that does not diverge issues only one path, and $\eta = 1$. The default in the animation, $m = 8$, $L_A = 3$, $L_B = 2$ and $L_0 = 4$ (the index, the branch and two instructions after it), gives $\eta = (128 + 24 + 48)/288 \approx 69\%$.
+
+</Layer>
+
+<Layer kind="code">
+
+The model's trace of one warp, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts): a path no lane takes is not issued.
+
+```ts
+if (taken)
+  for (let j = 0; j < lenA; j++) steps.push({ phase: "A", j, mask: taken });
+if (notTaken)
+  for (let j = 0; j < lenB; j++) steps.push({ phase: "B", j, mask: notTaken });
+for (let j = 0; j < lenC; j++) steps.push({ phase: "C", j, mask: FULL_MASK });
+```
+
+</Layer>
+
+## Avoiding divergence
+
+- **Branch on warp-aligned boundaries.** `if (threadIdx.x / 32 < k)` keeps whole warps together.
+- **Sort or bin the work** so threads in a warp take the same path (for example, group the elements that need the slow path).
+- **Keep divergent sections short.** The compiler may turn a short branch into predicated instructions, which still issue for the whole warp but avoid the branch itself (see the predication slide below).
+
+<Callout kind="deeper">
+
+- NVIDIA GPU series: [The warp: 32 threads, one program counter (mostly)](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-01), [divergence and re-convergence](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-06), [predication vs branching](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-07) and [independent thread scheduling](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-08).
+- CUDA series: [The SIMT execution model](https://brendanjameslynskey.github.io/CUDA_01_GPU_Architecture/#slide-03).
+- NVIDIA, CUDA Programming Guide: [SIMT architecture](https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html#simt-execution-model) and [independent thread scheduling](https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html#independent-thread-scheduling).
+
+</Callout>

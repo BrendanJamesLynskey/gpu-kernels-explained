@@ -1,0 +1,393 @@
+{
+ "common": {
+  "bank_bytes": {
+   "ref": "#shared-memory-access-patterns: successive 32-bit words, 32 bits per bank per clock",
+   "src": "cuda-kernels",
+   "st": "rule",
+   "v": 4
+  },
+  "reg_alloc_unit": {
+   "ref": "cudaOccRegAllocationGranularity: 256 registers per warp allocation",
+   "src": "cuda-occ",
+   "st": "rule",
+   "v": 256
+  },
+  "sector_bytes": {
+   "ref": "#coalesced-global-memory-access: 32-byte transactions",
+   "src": "cuda-kernels",
+   "st": "rule",
+   "v": 32
+  },
+  "smem_alloc_unit": {
+   "ref": "cudaOccSMemAllocationGranularity: 128 bytes (CC 8.x, 9.x)",
+   "src": "cuda-occ",
+   "st": "rule",
+   "v": 128
+  },
+  "smem_banks": {
+   "ref": "#shared-memory-access-patterns: 32 banks",
+   "src": "cuda-kernels",
+   "st": "rule",
+   "v": 32
+  },
+  "smem_reserved": {
+   "ref": "reservedSharedMemPerBlock: 1 KB per block (per-SM minus per-block maximum, Table 32)",
+   "src": "cuda-occ",
+   "st": "rule",
+   "v": 1024
+  },
+  "sub_partitions": {
+   "ref": "cudaOccSubPartitionsPerMultiprocessor: 4",
+   "src": "cuda-occ",
+   "st": "rule",
+   "v": 4
+  },
+  "warp_size": {
+   "ref": "§2.3 (a warp is 32 threads)",
+   "src": "cuda-kernels",
+   "st": "rule",
+   "v": 32
+  }
+ },
+ "kernels": {
+  "gemm128": {
+   "bm": 128,
+   "bn": 128,
+   "k": 4096,
+   "kind": "gemm",
+   "label": "GEMM 4096³, 128×128 tiles, 8×8 per thread",
+   "m": 4096,
+   "n": 4096,
+   "tm": 8,
+   "tn": 8
+  },
+  "gemm16": {
+   "bm": 16,
+   "bn": 16,
+   "k": 4096,
+   "kind": "gemm",
+   "label": "GEMM 4096³, 16×16 tiles in shared memory",
+   "m": 4096,
+   "n": 4096,
+   "tm": 1,
+   "tn": 1
+  },
+  "vecadd": {
+   "kind": "elementwise",
+   "label": "Vector add, 2^28 elements",
+   "n": 268435456
+  }
+ },
+ "presets": [
+  {
+   "arch": "Ampere (GA100), compute capability 8.0",
+   "fields": {
+    "clock_mhz": {
+     "ref": "Table 4 (GPU Boost Clock), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 1410
+    },
+    "fp32_cores_per_sm": {
+     "ref": "Table 4, p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 64
+    },
+    "hbm_bw": {
+     "ref": "Table 4 (Memory Bandwidth), p. 37",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 1555000000000.0
+    },
+    "hbm_bytes": {
+     "ref": "Table 4 (Memory Size 40 GB), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 40000000000.0
+    },
+    "l2_bytes": {
+     "ref": "Table 4 (L2 Cache Size 40960 KB), p. 37",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 41943040
+    },
+    "l2_bytes_per_clk": {
+     "ref": "p. 35: 'The A100 L2 read bandwidth is 5120 Bytes/clk'",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 5120
+    },
+    "lat_hbm": {
+     "ref": "Table IV, A100 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 466.3
+    },
+    "lat_l2": {
+     "ref": "Table IV, A100 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 261.5
+    },
+    "lat_smem": {
+     "ref": "Table IV, A100 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 29.0
+    },
+    "max_blocks_per_sm": {
+     "ref": "Table 5 (Max Thread Blocks / SM), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 32
+    },
+    "max_regs_per_thread": {
+     "ref": "Table 5 (Max Registers / Thread), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 255
+    },
+    "max_threads_per_block": {
+     "ref": "Table 5 (Max Thread Block Size), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 1024
+    },
+    "max_warps_per_sm": {
+     "ref": "Table 5 (Max Warps / SM), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 64
+    },
+    "mma_shape": {
+     "ref": "#warp-level-matrix-shape",
+     "src": "ptx",
+     "st": "rule",
+     "v": "mma.sync m16n8k16 (BF16, one warp)"
+    },
+    "peak_fp32": {
+     "ref": "Table 4 (Peak FP32 TFLOPS, non-Tensor), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 19500000000000.0
+    },
+    "peak_tensor": {
+     "ref": "Table 4 (Peak BF16 Tensor TFLOPS with FP32 accumulate, dense), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 312000000000000.0
+    },
+    "regs_per_block": {
+     "ref": "Table 5 (Max Registers / Block), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 65536
+    },
+    "regs_per_sm": {
+     "ref": "Table 5 (Max 32-bit Registers / SM), p. 43",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 65536
+    },
+    "smem_per_block": {
+     "ref": "Table 32, compute capability 8.0 (max per thread block, opt-in)",
+     "src": "cuda-cc",
+     "st": "rule",
+     "v": 166912
+    },
+    "smem_per_sm": {
+     "ref": "Table 5 (configurable up to 164 KB), p. 43; CUDA guide Table 32",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 167936
+    },
+    "sms": {
+     "ref": "Table 4, p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 108
+    }
+   },
+   "id": "a100",
+   "name": "A100 SXM4 40 GB"
+  },
+  {
+   "arch": "Hopper (GH100), compute capability 9.0",
+   "fields": {
+    "clock_mhz": {
+     "ref": "peak FP32 / (2 x FP32 cores): 67e12 / (2 x 132 x 128) Hz; the whitepaper lists the clock as not finalised",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 1982.717803030303
+    },
+    "fp32_cores_per_sm": {
+     "ref": "Table 3 (FP32 Cores / SM), p. 39",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 128
+    },
+    "hbm_bw": {
+     "ref": "GPU Memory Bandwidth 3.35TB/s",
+     "src": "h100-page",
+     "st": "spec",
+     "v": 3350000000000.0
+    },
+    "hbm_bytes": {
+     "ref": "GPU Memory 80GB",
+     "src": "h100-page",
+     "st": "spec",
+     "v": 80000000000.0
+    },
+    "l2_bytes": {
+     "ref": "Table 3 (L2 Cache Size 50 MB), p. 40",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 52428800
+    },
+    "l2_bytes_per_clk": {
+     "ref": "Table V: L2 throughput measured on H800 PCIe (same GH100 die), FP32 loads; NVIDIA does not publish H100's",
+     "src": "luo2024",
+     "st": "approximation",
+     "v": 4472.3
+    },
+    "lat_hbm": {
+     "ref": "Table IV, H800 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 478.8
+    },
+    "lat_l2": {
+     "ref": "Table IV, H800 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 263.0
+    },
+    "lat_smem": {
+     "ref": "Table IV, H800 PCIe (cycles)",
+     "src": "luo2024",
+     "st": "measured",
+     "v": 29.0
+    },
+    "max_blocks_per_sm": {
+     "ref": "Table 4 (Max Thread Blocks / SM), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 32
+    },
+    "max_regs_per_thread": {
+     "ref": "Table 4 (Max Registers / Thread), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 255
+    },
+    "max_threads_per_block": {
+     "ref": "Table 4 (Max Thread Block Size), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 1024
+    },
+    "max_warps_per_sm": {
+     "ref": "Table 4 (Max Warps / SM), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 64
+    },
+    "mma_shape": {
+     "ref": "#asynchronous-warpgroup-level-matrix-shape",
+     "src": "ptx",
+     "st": "rule",
+     "v": "wgmma.mma_async m64nNk16 (BF16, one warpgroup, N up to 256)"
+    },
+    "peak_fp32": {
+     "ref": "FP32 67 teraFLOPS",
+     "src": "h100-page",
+     "st": "spec",
+     "v": 67000000000000.0
+    },
+    "peak_tensor": {
+     "ref": "BFLOAT16 Tensor Core 1,979 teraFLOPS is 'with sparsity'; dense is half",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 989500000000000.0
+    },
+    "regs_per_block": {
+     "ref": "Table 4 (Max Registers / Thread Block), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 65536
+    },
+    "regs_per_sm": {
+     "ref": "Table 4 (Max 32-bit Registers / SM), p. 41",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 65536
+    },
+    "smem_per_block": {
+     "ref": "Table 32, compute capability 9.0 (max per thread block, opt-in)",
+     "src": "cuda-cc",
+     "st": "rule",
+     "v": 232448
+    },
+    "smem_per_sm": {
+     "ref": "Table 4 (configurable up to 228 KB), p. 41; CUDA guide Table 32",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 233472
+    },
+    "sms": {
+     "ref": "Table 3 (H100 SXM5), p. 39",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 132
+    }
+   },
+   "id": "h100",
+   "name": "H100 SXM5 80 GB"
+  }
+ ],
+ "sources": {
+  "a100-wp": {
+   "title": "NVIDIA A100 Tensor Core GPU Architecture (whitepaper)",
+   "url": "https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf"
+  },
+  "cuda-cc": {
+   "title": "CUDA Programming Guide, Compute capabilities (Table 32: shared memory)",
+   "url": "https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html"
+  },
+  "cuda-kernels": {
+   "title": "CUDA Programming Guide, §2.3 Writing CUDA kernels",
+   "url": "https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html"
+  },
+  "cuda-occ": {
+   "title": "cuda_occupancy.h, the CUDA Toolkit's occupancy calculator header (CUDA 12.5 copy)",
+   "url": "https://github.com/SciNim/nimcuda/blob/319b8deb31812fd9277c6232f0ae3fca31c6d55d/include/cuda12_5/cuda_occupancy.h"
+  },
+  "h100-page": {
+   "title": "NVIDIA H100 product page, Product Specifications (H100 SXM column)",
+   "url": "https://www.nvidia.com/en-us/data-center/h100/"
+  },
+  "h100-wp": {
+   "title": "NVIDIA H100 Tensor Core GPU Architecture (whitepaper, GTC 2022; preliminary specifications)",
+   "url": "https://resources.nvidia.com/en-us-tensor-core/gtc22-whitepaper-hopper"
+  },
+  "luo2024": {
+   "title": "Luo et al., Benchmarking and Dissecting the Nvidia Hopper GPU Architecture (arXiv 2402.13499)",
+   "url": "https://arxiv.org/abs/2402.13499"
+  },
+  "ptx": {
+   "title": "PTX ISA: matrix shapes for mma and wgmma",
+   "url": "https://docs.nvidia.com/cuda/parallel-thread-execution/index.html"
+  }
+ },
+ "sweepTiles": [
+  1,
+  2,
+  4,
+  8,
+  16,
+  32,
+  64,
+  128
+ ]
+}

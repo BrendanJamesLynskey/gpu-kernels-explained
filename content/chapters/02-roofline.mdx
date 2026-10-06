@@ -1,0 +1,77 @@
+<RooflineWidget>
+  <Eq
+    label="Attainable performance is the smaller of the peak and the bandwidth times the arithmetic intensity"
+    tex="P(I) = \min\bigl(\htmlClass{hl-peak}{P_{\text{peak}}},\; \htmlClass{hl-bw}{W_{\text{HBM}}} \times \htmlClass{hl-ai}{I}\bigr)"
+  />
+</RooflineWidget>
+
+<Layer kind="concept">
+
+[Chapter 1](/learn/01-memory-hierarchy) found each kernel's slowest level. The **roofline** (Williams, Waterman and Patterson, 2009) turns the most common case, HBM against the ALUs, into one picture. Put a kernel's **arithmetic intensity** $I$, the flops it does per byte it moves from HBM, on the horizontal axis. Then the best it can do is either limited by the bandwidth (the sloped line: each byte delivered allows $I$ flops) or by the peak (the flat roof). The two meet at the **ridge point**: <V of="a100.ridge_fp32" fmt="ai" /> for the A100's FP32 units, <V of="h100.ridge_fp32" fmt="ai" /> for the H100's.
+
+The animation steps a 4096 × 4096 × 4096 FP32 matrix multiply through tile sizes from 1 to 128. Every block of $b \times b$ outputs loads its $b$ rows of A and $b$ columns of B once and reuses each value $b$ times, so the intensity grows with the tile: about $b/4$ flops per byte. With 1×1 tiles the kernel manages <V of="a100.sweep.1.perf" fmt="flops" />; with 32×32 tiles, <V of="a100.sweep.32.perf" fmt="flops" />, still on the slope; at 64×64 it passes the A100's ridge and meets the FP32 roof. On the H100, whose ridge sits further right, it takes 128×128.
+
+The dashed roof is the BF16 tensor cores, about 16 (A100) or 15 (H100) times higher than FP32. Its ridge is at <V of="a100.ridge_tensor" fmt="ai" /> on the A100: tensor-core kernels need far more reuse before they stop waiting on memory. That is why the GEMM chapter's last step, and FlashAttention, are about keeping tiles on chip.
+
+Slide the intensity yourself: below the ridge, every doubling of $I$ doubles the attainable speed; above it, nothing changes.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The sweep's traffic is the model's count of the bytes the tiles load (chapter 1), with every load missing L2 (the three 64 MiB matrices do not fit in the A100's 40 MB). A real kernel gets some L2 reuse between neighbouring blocks, so its true HBM intensity is a little higher. The roofline bounds performance; it does not predict it.
+
+</Callout>
+
+<Layer kind="maths">
+
+For peak $P$ and bandwidth $W$, the attainable rate at intensity $I$ is
+
+$$
+P(I) = \min(P,\ W I), \qquad I^{*} = \frac{P}{W}.
+$$
+
+Below the ridge $I^{*}$ the kernel is **memory-bound** and $P(I) = WI$; above it, **compute-bound** and $P(I) = P$. For the A100, $I^{*} = 19.5 \times 10^{12} / 1.555 \times 10^{12} \approx$ <V of="a100.ridge_fp32" fmt="num" />.
+
+For the square GEMM ($M = N = K = n$) with $b \times b$ tiles and no L2 reuse,
+
+$$
+F = 2n^3, \qquad B_{\text{HBM}} = 4\left(\frac{2n^3}{b} + n^2\right), \qquad
+I = \frac{2n^3}{4\left(2n^3/b + n^2\right)} = \frac{b}{4}\cdot\frac{1}{1 + b/(2n)} \approx \frac{b}{4}.
+$$
+
+The $n^2$ term is writing C once. Setting $I = I^{*}$ gives the smallest tile that can reach the roof: $b \approx 4 I^{*}$, about 50 on the A100 and 80 on the H100, so 64 and 128 in powers of two.
+
+</Layer>
+
+<Layer kind="code">
+
+The sweep, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts):
+
+```ts
+  for (const b of SWEEP_TILES) {
+    const t = b > 16 ? idiv(b, 16) : 1;
+    const g = gemmTraffic(p, size, size, size, b, b, t, t);
+    const ai = g.flops / g.bytes.hbm;
+    const pt = rooflinePoint(p, ai, "fp32");
+```
+
+</Layer>
+
+## Where real kernels sit
+
+| Kernel                    | Intensity (flop per HBM byte)                    | On the A100's FP32 roofline                             |
+| ------------------------- | ------------------------------------------------ | ------------------------------------------------------- |
+| Vector add, FP32          | <V of="a100.kernels.vecadd.ai.hbm" fmt="num" />  | far down the slope                                      |
+| GEMM 4096³, 16×16 tiles   | <V of="a100.kernels.gemm16.ai.hbm" fmt="num" />  | on the slope (and shared memory binds first, chapter 1) |
+| GEMM 4096³, 128×128 tiles | <V of="a100.kernels.gemm128.ai.hbm" fmt="num" /> | on the roof                                             |
+
+Batch-1 decoding in an LLM is a matrix-vector product: each weight is read once and used for one multiply-add, about 1 flop per byte at BF16, which is why decode is memory-bound ([LLM Inference Explained, chapter 3](https://llm-inference-explained.vercel.app/learn/03-roofline)).
+
+<Callout kind="deeper">
+
+- Williams, Waterman and Patterson, "Roofline: an insightful visual performance model for multicore architectures", _Communications of the ACM_ 52(4), 2009, [doi:10.1145/1498765.1498785](https://doi.org/10.1145/1498765.1498785).
+- NVIDIA GPU series: [What bandwidth buys you: the decode-bound insight](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-10).
+- CUDA series: [Tiled matrix multiplication](https://brendanjameslynskey.github.io/CUDA_05_Matrix_Multiply/#slide-04) and [memory throughput analysis in Nsight Compute](https://brendanjameslynskey.github.io/CUDA_07_Profiling/#slide-05).
+
+</Callout>

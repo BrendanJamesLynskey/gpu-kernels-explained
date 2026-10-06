@@ -1,0 +1,63 @@
+<OccupancyWidget>
+  <Eq
+    label="Blocks per SM is the smallest of the warp-slot, register, shared-memory and block limits; occupancy is blocks times warps per block over 64"
+    tex="B = \min\bigl(\htmlClass{hl-warps}{B_{\text{warps}}},\ \htmlClass{hl-regs}{B_{\text{regs}}},\ \htmlClass{hl-smem}{B_{\text{smem}}},\ \htmlClass{hl-blocks}{32}\bigr), \quad \text{occ.} = \tfrac{B\,w}{64}"
+  />
+</OccupancyWidget>
+
+<Layer kind="concept">
+
+An SM keeps many warps resident at once and switches between them every cycle: while one waits hundreds of cycles for memory ([chapter 1](/learn/01-memory-hierarchy)'s latencies), the others compute. **Occupancy** is "the ratio of the number of active warps to the maximum number of active warps supported by the SM" (CUDA Programming Guide §2.3.7). On the A100 and H100 the maximum is 64 warps (2,048 threads) per SM.
+
+How many warps fit depends on what each block asks for. The scheduler places a block on an SM only if the SM still has room for all of it: its **warp slots**, its **registers** (the SM has 65,536), its **shared memory** (up to <V of="a100.smem_per_sm" fmt="kib" /> on the A100, <V of="h100.smem_per_sm" fmt="kib" /> on the H100) and one of the 32 **block slots**. The animation places blocks one at a time until the next one does not fit; the resource that ran out is the **limiter**.
+
+Try the guide's two examples on the A100 (shared memory at 0):
+
+- **768 threads per block**: two blocks use 48 of 64 warp slots, and a third would need 72. Occupancy 75%.
+- **32 threads per block**: each block is one warp, so the 32-block limit stops the SM at 32 warps. Occupancy 50%.
+
+Then raise the registers: at 64 registers per thread, 256-thread blocks stop at 4 blocks (32 warps, 50%). Add 48 KB of shared memory and only 3 fit on the A100 (37.5%), while the H100's larger shared memory still takes 4.
+
+High occupancy is a means, not the goal. A kernel that keeps enough independent work in each thread (instruction-level parallelism, such as the 8×8 register tiles of [chapter 1](/learn/01-memory-hierarchy)'s fastest GEMM) can hide latency with fewer warps, and the registers that buys are often worth more than the occupancy they cost.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The limits follow the CUDA Toolkit's occupancy calculator (`cuda_occupancy.h`) for compute capability 8.0 and 9.0: registers are allocated per warp in units of 256, across 4 sub-partitions; shared memory in units of 128 bytes, plus 1 KB the driver reserves per block; the shared-memory carveout is assumed set to its maximum. Barriers and thread-block clusters are not modelled.
+
+</Callout>
+
+<Layer kind="maths">
+
+A block of $T$ threads is $w = \lceil T / 32 \rceil$ warps. With $r$ registers per thread, each warp is allocated $r_w = 256 \lceil 32r / 256 \rceil$ registers, from one of 4 sub-partitions of $65536 / 4 = 16384$ registers. With $s$ bytes of shared memory per block, the block is allocated $s_b = 128 \lceil (s + 1024)/128 \rceil$ bytes. Then the SM holds
+
+$$
+B = \min\left(\left\lfloor \frac{64}{w} \right\rfloor,\ \left\lfloor \frac{4 \lfloor 16384 / r_w \rfloor}{w} \right\rfloor,\ \left\lfloor \frac{S_{\text{SM}}}{s_b} \right\rfloor,\ 32\right)
+$$
+
+blocks, and the occupancy is $B\,w / 64$.
+
+Worked example (A100, 256 threads, 64 registers, 48 KB): $w = 8$; $r_w = 2048$, so $\lfloor 16384/2048 \rfloor = 8$ warps per sub-partition, $4 \times 8 / 8 = 4$ blocks; $s_b = 49 \times 1024$, so $\lfloor 164/49 \rfloor = 3$ blocks. $B = \min(8, 4, 3, 32) = 3$, occupancy $3 \times 8 / 64 = 37.5\%$, limited by shared memory.
+
+</Layer>
+
+<Layer kind="code">
+
+The register limit, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts) (a port of the same rule in `cuda_occupancy.h`):
+
+```ts
+const regsPerWarp = roundUp(regs * p.warp_size, p.reg_alloc_unit);
+const regsPerBlock = regsPerWarp * warpsPerBlock;
+const regsAssumed = regsPerWarp * roundUp(warpsPerBlock, p.sub_partitions);
+```
+
+</Layer>
+
+<Callout kind="deeper">
+
+- NVIDIA GPU series: [Occupancy and ILP: two ways to hide latency](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-05) and [occupancy maths, worked out](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-09).
+- CUDA series: [Occupancy analysis in Nsight Compute](https://brendanjameslynskey.github.io/CUDA_07_Profiling/#slide-04).
+- NVIDIA, CUDA Programming Guide: [kernel launch and occupancy](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#kernel-launch-and-occupancy) and [compute capabilities](https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html).
+
+</Callout>

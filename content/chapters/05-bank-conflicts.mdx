@@ -1,0 +1,78 @@
+<BankWidget>
+  <Eq
+    label="The number of passes is the largest number of different words any one bank must deliver"
+    tex="\text{passes} = \htmlClass{hl-degree}{\max_{b}\ \bigl|\{\, w_i : w_i \bmod 32 = b \,\}\bigr|}"
+  />
+</BankWidget>
+
+<Layer kind="concept">
+
+Shared memory is split into **32 banks**: "successive 32-bit words map to successive banks. Each bank has a bandwidth of 32 bits per clock cycle" (CUDA Programming Guide §2.3.4.2). Word $w$ lives in bank $w \bmod 32$, which is why the animation draws memory as rows of 32 words: a word's column _is_ its bank.
+
+If the 32 lanes of a warp ask for words in 32 different banks, one pass serves them all. If several lanes ask a bank for _different_ words, the bank serves them one per pass: a **bank conflict**, and "the access to the data in that bank will be serialized". If they ask for the _same_ word, it is **broadcast** to all of them at no extra cost.
+
+The default is the guide's own example. A 32 × 32 tile of floats, `float s[32][32]`, read down a column (lane $i$ reads `s[i][0]`, as a transpose does): every word sits in column 0, so all 32 requests queue at bank 0 and the warp needs **32 passes**, a 32-way conflict. Now move the padding slider to 1, making the array `s[32][33]`: each row is one word longer, so row $i$'s first word moves to bank $i$, the column becomes a diagonal, and the conflict disappears. The cost is 32 unused words.
+
+Other patterns to try: a **row** read is conflict-free; a **stride** of 2 words gives the guide's two-way conflict, while stride 3, or any odd stride, is conflict-free; and **broadcast** has eight lanes share each word, still one pass.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The model counts passes for 32-bit accesses by one warp, by the guide's rule. It does not model 64- and 128-bit accesses (which the hardware splits differently), or the extra cycles a bank conflict costs in a real pipeline beyond the serialisation itself.
+
+</Callout>
+
+<Layer kind="maths">
+
+Lane $i$ reads word $w_i$ of bank $w_i \bmod 32$. Bank $b$ must deliver every _distinct_ word asked of it, one per pass, so the warp needs
+
+$$
+\text{passes} = \max_b \bigl|\{\, w_i : w_i \bmod 32 = b \,\}\bigr| ,
+$$
+
+and gets $1/\text{passes}$ of shared memory's bandwidth.
+
+For a strided access $w_i = i\,d$, lanes $i$ and $j$ collide when $(i - j)\,d \equiv 0 \pmod{32}$. The 32 lanes fall into $\gcd(d, 32)$ lanes per bank, so
+
+$$
+\text{passes} = \gcd(d, 32),
+$$
+
+which is 1 for every odd stride, 2 for $d = 2$ and 32 for $d = 32$.
+
+For the column of `float s[32][32 + p]`, $w_i = i\,(32 + p)$, so $w_i \bmod 32 = i\,p \bmod 32$: the stride is effectively $p$. With $p = 0$ every lane hits bank 0 (32 passes); with $p = 1$ lane $i$ hits bank $i$ (1 pass); with $p = 2$, two passes.
+
+</Layer>
+
+<Layer kind="code">
+
+The model's pass count, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts): a lane is served in the pass whose index is its word's place in its bank's queue.
+
+```ts
+  for (let pnum = 0; pnum < degree; pnum++) {
+    const served: number[] = [];
+    words.forEach((w, lane) => {
+      const d = distinct[w % banks] as number[];
+      if (d.length > pnum && d[pnum] === w) served.push(lane);
+    });
+```
+
+The fix in CUDA, **illustrative and not compiled by this site's CI**, as the guide shows it:
+
+```cuda
+__shared__ float tile[32][32 + 1];   // one word of padding per row
+tile[threadIdx.y][threadIdx.x] = in[...];   // row write: no conflict
+__syncthreads();
+out[...] = tile[threadIdx.x][threadIdx.y];  // column read: no conflict either
+```
+
+</Layer>
+
+<Callout kind="deeper">
+
+- CUDA series: [Shared memory](https://brendanjameslynskey.github.io/CUDA_04_Memory_Hierarchy/#slide-03).
+- NVIDIA GPU series: [Shared memory + L1, configurable per kernel](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-03).
+- NVIDIA, CUDA Programming Guide: [shared memory access patterns](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#shared-memory-access-patterns) and [bank conflicts](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#shared-memory-bank-conflicts).
+
+</Callout>
