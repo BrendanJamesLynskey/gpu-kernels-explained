@@ -1,0 +1,104 @@
+<DequantWidget>
+  <Eq
+    label="A 4-bit weight is dequantised as q minus 8 times the group's scale, then used in a multiply-add"
+    tex="\begin{gathered} \htmlClass{hl-q}{q_i = (r \gg 4i)\ \&\ \mathtt{0xF}}, \qquad w_i = (q_i - 8)\,\htmlClass{hl-s}{s} \\ \htmlClass{hl-acc}{\text{acc} \leftarrow \text{acc} + w_i\,x_i} \end{gathered}"
+  />
+</DequantWidget>
+
+<Layer kind="concept">
+
+[Chapter 2](/learn/02-roofline) put batch-1 decoding far down the roofline's slope: each weight is read from HBM for a single multiply-add. When a kernel is memory-bound, the way to make it faster is to read fewer bytes, and the bytes are almost all weights. Store each weight in 8 or 4 bits instead of 16 and the time falls by nearly the same factor, as long as the kernel stays memory-bound.
+
+The arithmetic still happens in BF16 (for weight-only formats such as W4A16): the kernel loads the packed weights, **dequantises them in registers**, just before the multiply-add, and never writes the BF16 weights anywhere. The animation does it for one 32-bit register holding eight 4-bit weights: shift and mask out each 4-bit integer $q$, subtract the offset 8 to centre it, multiply by the scale $s$ of its group (here one scale per 128 weights, stored in 16 bits), and multiply-add with the activation. Production kernels unpack several weights at once with bit-manipulation tricks and feed the results to the tensor cores; the order of operations is the same.
+
+When the whole layer has enough tokens to be compute-bound, the bytes stop mattering and the tensor cores' rate does. A W4A16 kernel still runs at the BF16 tensor peak; only formats whose _maths_ is narrower go faster there: INT8 tensor cores (<V of="a100.peak_int8_tensor" fmt="flops" /> dense on the A100, twice its BF16 rate) for W8A8, or FP8 on the H100.
+
+</Layer>
+
+<QuantWidget>
+  <Eq
+    label="The layer's time is the larger of its bytes over the HBM bandwidth and its flops over the tensor-core peak"
+    tex="T = \max\Bigl(\htmlClass{hl-bytes}{\frac{\text{bytes}}{W_{\text{HBM}}}},\ \htmlClass{hl-flops}{\frac{2 N_w t}{P_{\text{format}}}}\Bigr), \quad \text{bytes} \approx N_w \tfrac{b}{8} + \text{scales}"
+  />
+</QuantWidget>
+
+<Layer kind="concept">
+
+The second animation applies one 8192 × 8192 layer (67 million weights) to a growing batch of tokens. At batch 1 on the A100 the model gives <V of="a100.quant.bf16.1.total" fmt="time" /> in BF16, <V of="a100.quant.int8.1.total" fmt="time" /> in INT8 and <V of="a100.quant.int4.1.total" fmt="time" /> in INT4: <V of="a100.quant.int4.1.weight_bytes" fmt="bytes" /> of INT4 weights and scales instead of <V of="a100.quant.bf16.1.weight_bytes" fmt="bytes" />. The lines stay flat while the batch shares one read of the weights, then bend upwards where the tensor cores take over, and the INT4 line bends first, because it has fewer bytes to hide behind. From there on, the weight-only formats are no faster than BF16, and only W8A8, with its INT8 tensor cores, keeps an advantage.
+
+So quantisation is mainly a decode-time (small-batch) optimisation for weights, and a compute-time one only when the maths itself is narrower. The accuracy side, which formats and scales keep a model's quality, is for the Numerics site (coming).
+
+</Layer>
+
+<Callout kind="illustrative">
+
+Roofline times from the model: every byte at the HBM peak, the maths at the format's dense tensor-core peak, nothing for the dequantising instructions or the latency. Real W4A16 kernels lose some of the 4× to the unpacking work and to their scales; at large batch they can be slower than BF16, not equal to it. The dequantising example uses a symmetric offset of 8 and a power-of-two scale so that every value is exact.
+
+</Callout>
+
+<Layer kind="maths">
+
+A $K \times N$ weight matrix in $b$-bit integers, with one 16-bit scale per group of $g$ weights, takes
+
+$$
+B_w = KN\,\frac{b}{8} + 2\,\frac{KN}{g}
+$$
+
+bytes: $KN\,(0.5 + 2/128) = 0.516\,KN$ for INT4 with $g = 128$, against $2KN$ in BF16, a ratio of 3.88. For a batch of $t$ tokens the layer does $2KNt$ flops, so its intensity at batch $t$ is about
+
+$$
+I \approx \frac{2KNt}{B_w} = \frac{2t}{b/8 + 2/g},
+$$
+
+and it reaches the ridge $I^* = P/W$ at $t^* \approx I^*\,(b/8 + 2/g)/2$: for BF16 on the A100 that is $t^* \approx$ <V of="a100.ridge_tensor" fmt="num" />, while INT4 gets there at about a quarter of it. Above $t^*$, $T = 2KNt/P$ whatever the storage format.
+
+</Layer>
+
+<Layer kind="code">
+
+The dequantise step, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts):
+
+```ts
+const qi = (word >>> (4 * i)) & 0xf;
+const w = (qi - 8) * scale;
+```
+
+The bytes of a quantised layer:
+
+```ts
+let wbytes = idiv(rows * cols * f.bits, 8);
+if (f.group === -1) wbytes += 2 * rows;
+else if (f.group > 0) wbytes += 2 * idiv(rows * cols, f.group);
+```
+
+The same unpacking in CUDA, **illustrative and not compiled by this site's CI**:
+
+```cuda
+uint32_t r = packed[i];                    // eight 4-bit weights
+#pragma unroll
+for (int j = 0; j < 8; ++j) {
+  int q = (r >> (4 * j)) & 0xF;            // unpack
+  float w = (q - 8) * scale;               // dequantise in a register
+  acc = fmaf(w, x[8 * i + j], acc);        // and use it at once
+}
+```
+
+</Layer>
+
+## One 8192 × 8192 layer (model)
+
+| Format                        | Weight bytes                                          | Batch 1, A100                                 | Batch 1, H100                                 | Batch 1024, A100                                 |
+| ----------------------------- | ----------------------------------------------------- | --------------------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| BF16                          | <V of="a100.quant.bf16.1.weight_bytes" fmt="bytes" /> | <V of="a100.quant.bf16.1.total" fmt="time" /> | <V of="h100.quant.bf16.1.total" fmt="time" /> | <V of="a100.quant.bf16.1024.total" fmt="time" /> |
+| INT8 weights (W8A16)          | <V of="a100.quant.int8.1.weight_bytes" fmt="bytes" /> | <V of="a100.quant.int8.1.total" fmt="time" /> | <V of="h100.quant.int8.1.total" fmt="time" /> | <V of="a100.quant.int8.1024.total" fmt="time" /> |
+| INT4 weights, g = 128 (W4A16) | <V of="a100.quant.int4.1.weight_bytes" fmt="bytes" /> | <V of="a100.quant.int4.1.total" fmt="time" /> | <V of="h100.quant.int4.1.total" fmt="time" /> | <V of="a100.quant.int4.1024.total" fmt="time" /> |
+| W8A8 (INT8 tensor cores)      | <V of="a100.quant.w8a8.1.weight_bytes" fmt="bytes" /> | <V of="a100.quant.w8a8.1.total" fmt="time" /> | <V of="h100.quant.w8a8.1.total" fmt="time" /> | <V of="a100.quant.w8a8.1024.total" fmt="time" /> |
+
+<Callout kind="deeper">
+
+- NVIDIA GPU series: [Number formats explained](https://brendanjameslynskey.github.io/NVIDIA_GPU_03_Tensor_Cores/#slide-08), [Quantization recipes](https://brendanjameslynskey.github.io/NVIDIA_GPU_19_TensorRT_LLM/#slide-06) and [Performance model: decode-bound vs prefill-bound](https://brendanjameslynskey.github.io/NVIDIA_GPU_10_Software_and_Performance/#slide-09).
+- Frantar et al., [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323) (2022); Lin et al., [AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978) (2023); Dettmers et al., [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339) (2022).
+- NVIDIA, [A100 whitepaper](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf), Table 4 (the INT8 tensor peak), and the [H100 product page](https://www.nvidia.com/en-us/data-center/h100/) (FP8 Tensor Core: 3,958 teraFLOPS with sparsity, half that dense).
+- [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) for where decode time goes in a whole model.
+
+</Callout>

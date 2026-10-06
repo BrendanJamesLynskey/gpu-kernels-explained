@@ -1,0 +1,92 @@
+<GemmWidget>
+  <Eq
+    label="The arithmetic intensity of one block's k-step is its flops over the bytes of the A and B tiles it loads"
+    tex="I_{\text{global}} = \frac{2\,\htmlClass{hl-tile}{b_m b_n}\,\htmlClass{hl-k}{b_k}}{e\,(\htmlClass{hl-tile}{b_m}\,\htmlClass{hl-k}{b_k} + \htmlClass{hl-k}{b_k}\,\htmlClass{hl-tile}{b_n})} = \frac{2}{e\,(1/b_n + 1/b_m)}"
+  />
+</GemmWidget>
+
+<Layer kind="concept">
+
+A matrix multiply $C = AB$ does $2n^3$ flops on $3n^2$ numbers, so in principle every number can be reused $n$ times. A kernel's whole job is to arrange that reuse close to the ALUs. The animation shows four ways, on a problem small enough to draw: a 16 × 16 × 16 multiply, worked a block of C at a time, with the k dimension in slices of 4.
+
+1. **Naive.** One thread per output; each thread reads its row of A and its column of B straight from global memory. Every value of A is fetched once per column of C. The counters stop at <V of="a100.gemm.naive.ai.l2" fmt="ai" /> on the 4096³ problem: the GPU spends its time waiting.
+2. **Tiled in shared memory.** A block of threads loads a tile of A and a tile of B into shared memory together, once, and every thread of the block reads them from there. A value fetched from global memory is now used by a whole row or column of the block: intensity at L2 rises to <V of="a100.gemm.smem.ai.l2" fmt="ai" /> for 32 × 32 blocks. But each multiply-add still reads two values from shared memory, so shared memory becomes the limit ([chapter 1](/learn/01-memory-hierarchy)).
+3. **Register blocking.** Each thread computes an 8 × 8 patch of C: per k it loads 8 values of A and 8 of B into registers and does 64 multiply-adds with them. Shared-memory traffic per flop falls 8-fold, the block grows to 128 × 128, and on the A100 the kernel finally reaches the FP32 roof: <V of="a100.gemm.regs.achieved" fmt="flops" /> in the model.
+4. **Tensor cores.** A warp hands whole tiles to a matrix instruction (`mma.sync` on the A100, `wgmma` on the H100) that does a small matrix multiply in one go, with BF16 inputs and FP32 sums. Half the bytes per value and a roof 16 times higher (on the A100). Now the same 128 × 128 tiles give <V of="a100.gemm.tensor.ai.hbm" fmt="ai" /> from HBM, well below the tensor ridge at <V of="a100.ridge_tensor" fmt="ai" />: under the model's no-reuse assumption the kernel is memory-bound again, at <V of="a100.gemm.tensor.achieved" fmt="flops" />.
+
+That last line is the lesson of the chapter: each step moved the bottleneck, and the faster the ALUs, the more reuse a kernel needs. Production tensor-core kernels use larger tiles (128 × 256), keep neighbouring blocks working on the same rows and columns so their loads hit L2, and on Hopper share tiles between blocks of a cluster.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The 4096³ figures are the model's (chapter 1's rules): every global load misses L2 because A and B together do not fit, every level runs at its peak, and the latency is ignored. Real kernels get L2 hits from neighbouring blocks, so the naive and tensor-core kernels do better than shown, while the register-blocked kernel cannot quite reach the roof. The tensor-core variant counts BF16 operands and FP32 accumulators; the register file is left out of its time.
+
+</Callout>
+
+<Layer kind="maths">
+
+Take a block that computes a $b_m \times b_n$ tile of C, stepping through k in slices of $b_k$. Each step loads $b_m b_k$ values of A and $b_k b_n$ of B ($e$ bytes each) and does $2 b_m b_n b_k$ flops, so
+
+$$
+I_{\text{global}} = \frac{2\, b_m b_n b_k}{e\,(b_m b_k + b_k b_n)} = \frac{2}{e\,(1/b_n + 1/b_m)},
+$$
+
+which for square blocks is $b/e$: $b/4$ for FP32 and $b/2$ for BF16. The slice depth $b_k$ cancels: it sets how much shared memory a stage needs, not the reuse.
+
+Inside the block, a thread that owns a $t_m \times t_n$ patch reads $t_m + t_n$ values from shared memory per k and does $2 t_m t_n$ flops with them, so its shared-memory intensity is
+
+$$
+I_{\text{smem}} = \frac{2\, t_m t_n}{4\,(t_m + t_n)} ,
+$$
+
+$1/4$ for one output per thread and $2$ for an 8 × 8 patch (before counting the tile stores). That 8-fold gain is register blocking.
+
+The registers pay for it: an 8 × 8 patch is 64 accumulators plus 16 operands per thread, so these kernels need well over 80 registers per thread, and [occupancy](/learn/06-occupancy) falls. Fewer warps are needed, though, because each one has 64 independent multiply-adds per k to issue.
+
+</Layer>
+
+<Layer kind="code">
+
+The model's bytes for one k-tile of one block, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts):
+
+```ts
+if (staged) {
+  const tile = eb * (bm * bk + bk * bn);
+  glob += tile;
+  smem += tile + eb * bk * idiv(bm * bn, tm * tn) * (tm + tn);
+} else glob += eb * bm * bn * 2 * bk;
+```
+
+The shared-memory kernel's inner loop in CUDA, **illustrative and not compiled by this site's CI**:
+
+```cuda
+for (int k0 = 0; k0 < K; k0 += TILE) {
+  As[ty][tx] = A[row * K + k0 + tx];          // each thread loads one value
+  Bs[ty][tx] = B[(k0 + ty) * N + col];
+  __syncthreads();
+  for (int k = 0; k < TILE; ++k)
+    acc += As[ty][k] * Bs[k][tx];             // reused TILE times from smem
+  __syncthreads();
+}
+```
+
+</Layer>
+
+## The four kernels on a 4096³ GEMM (model)
+
+| Kernel                       | Flop per byte from L2                       | Bound by (A100)   | Time, A100                                   | Time, H100                                   |
+| ---------------------------- | ------------------------------------------- | ----------------- | -------------------------------------------- | -------------------------------------------- |
+| Naive                        | <V of="a100.gemm.naive.ai.l2" fmt="num" />  | HBM               | <V of="a100.gemm.naive.total" fmt="time" />  | <V of="h100.gemm.naive.total" fmt="time" />  |
+| Shared-memory tiles (32²)    | <V of="a100.gemm.smem.ai.l2" fmt="num" />   | shared memory     | <V of="a100.gemm.smem.total" fmt="time" />   | <V of="h100.gemm.smem.total" fmt="time" />   |
+| Register blocking (128², 8²) | <V of="a100.gemm.regs.ai.l2" fmt="num" />   | the FP32 ALUs     | <V of="a100.gemm.regs.total" fmt="time" />   | <V of="h100.gemm.regs.total" fmt="time" />   |
+| Tensor cores (BF16, 128²)    | <V of="a100.gemm.tensor.ai.l2" fmt="num" /> | HBM (no L2 reuse) | <V of="a100.gemm.tensor.total" fmt="time" /> | <V of="h100.gemm.tensor.total" fmt="time" /> |
+
+<Callout kind="deeper">
+
+- CUDA series: [Naive implementation](https://brendanjameslynskey.github.io/CUDA_05_Matrix_Multiply/#slide-02), [Tiled multiplication: concept](https://brendanjameslynskey.github.io/CUDA_05_Matrix_Multiply/#slide-04) and [Further optimisation ideas](https://brendanjameslynskey.github.io/CUDA_05_Matrix_Multiply/#slide-07).
+- NVIDIA GPU series: [MMA shapes and APIs](https://brendanjameslynskey.github.io/NVIDIA_GPU_03_Tensor_Cores/#slide-09), [WGMMA: warp-group matrix multiply](https://brendanjameslynskey.github.io/NVIDIA_GPU_31_Hopper_Low_Level/#slide-05) and [CUTLASS](https://brendanjameslynskey.github.io/NVIDIA_GPU_10_Software_and_Performance/#slide-04).
+- NVIDIA, PTX ISA: [warp-level matrix shapes](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#warp-level-matrix-shape).
+- [LLM Architectures Explained](https://llm-architectures-explained.vercel.app/learn) counts the flops of every model's layers; this chapter is how those flops are executed.
+
+</Callout>

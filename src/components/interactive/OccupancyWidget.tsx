@@ -12,6 +12,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 
 import { AnimationPanel } from "@/components/anim/AnimationPanel";
 import { useStepper } from "@/components/anim/useStepper";
+import { useSvgFont } from "@/components/viz/useSvgFont";
 import { Segmented, Slider, Stat } from "@/components/ui/Controls";
 import { fmtKiB, pct } from "@/lib/format";
 import { LIMIT_TEXT, occupancyCaption } from "@/lib/gpu/captions";
@@ -45,6 +46,8 @@ export default function OccupancyWidget({
   const [smemKb, setSmemKb] = useState(48);
   const [hover, setHover] = useState<string | null>(null);
   const hatchId = useId().replace(/:/g, "");
+  const font = useSvgFont(W);
+  const fs = font.fs;
 
   const p = useMemo(() => preset(pid), [pid]);
   const maxKb = Math.floor(p.smem_per_block / 1024);
@@ -86,7 +89,8 @@ export default function OccupancyWidget({
         <text
           x={4}
           y={y + 11}
-          className="fill-neutral-800 text-[12px] font-medium dark:fill-neutral-200"
+          style={{ fontSize: fs(12) }}
+          className="fill-neutral-800 font-medium dark:fill-neutral-200"
         >
           {label}
         </text>
@@ -126,10 +130,11 @@ export default function OccupancyWidget({
         <text
           x={BAR_X}
           y={y + 25}
-          className="fill-neutral-600 font-mono text-[10px] dark:fill-neutral-400"
+          style={{ fontSize: fs(10) }}
+          className="fill-neutral-600 font-mono dark:fill-neutral-400"
         >
           {fmt(used)} of {fmt(total)}
-          {isLimit ? " · next block does not fit" : ""}
+          {isLimit && !font.narrow ? " · next block does not fit" : ""}
         </text>
       </g>
     );
@@ -138,6 +143,7 @@ export default function OccupancyWidget({
   const visual = (
     <div className="mx-auto max-w-xl">
       <svg
+        ref={font.ref}
         viewBox={`0 0 ${W} 196`}
         className="h-auto w-full"
         role="img"
@@ -150,7 +156,8 @@ export default function OccupancyWidget({
         <text
           x={4}
           y={14}
-          className="fill-neutral-800 text-[12px] font-medium dark:fill-neutral-200"
+          style={{ fontSize: fs(12) }}
+          className="fill-neutral-800 font-medium dark:fill-neutral-200"
         >
           Warp slots
         </text>
@@ -178,7 +185,8 @@ export default function OccupancyWidget({
         <text
           x={4}
           y={28}
-          className="fill-neutral-600 font-mono text-[10px] dark:fill-neutral-400"
+          style={{ fontSize: fs(10) }}
+          className="fill-neutral-600 font-mono dark:fill-neutral-400"
         >
           {s.warps}/{p.max_warps_per_sm}
         </text>
@@ -212,10 +220,11 @@ export default function OccupancyWidget({
         <text
           x={4}
           y={188}
-          className="fill-neutral-700 text-[10.5px] dark:fill-neutral-300"
+          style={{ fontSize: fs(10.5) }}
+          className="fill-neutral-700 dark:fill-neutral-300"
         >
           {rejected
-            ? `Limited by ${o.limiters.map((l) => LIMIT_TEXT[l]).join(" and ")}: ${o.blocks} blocks × ${wpb} warps = ${o.active_warps} warps (${pct(o.occupancy, 1)})`
+            ? `${font.narrow ? "" : `Limited by ${o.limiters.map((l) => LIMIT_TEXT[l]).join(" and ")}: `}${o.blocks} blocks × ${wpb} warps = ${o.active_warps} warps (${pct(o.occupancy, 1)})`
             : `Placing block ${s.blocks}…`}
         </text>
       </svg>

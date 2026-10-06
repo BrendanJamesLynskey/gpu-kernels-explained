@@ -16,14 +16,6 @@ export const metadata = {
     "Chapters on how a GPU executes a kernel, each built around an animation driven by the tested execution model.",
 };
 
-const COMING = [
-  "GEMM, step by step: naive, tiled, register-blocked, tensor cores",
-  "Reductions and warp shuffles",
-  "Softmax and FlashAttention",
-  "Split-K, streams and overlap",
-  "Quantised kernels",
-] as const;
-
 export default function LearnIndex(): JSX.Element {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
@@ -83,20 +75,6 @@ export default function LearnIndex(): JSX.Element {
           </li>
         ))}
       </ol>
-
-      <h2 className="mt-10 text-sm font-semibold uppercase tracking-widest text-neutral-600 dark:text-neutral-400">
-        Coming next
-      </h2>
-      <ul className="mt-3 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
-        {COMING.map((c, i) => (
-          <li key={c}>
-            <span className="font-mono text-xs">
-              {String(SECTIONS.length + i + 1).padStart(2, "0")}
-            </span>{" "}
-            {c}
-          </li>
-        ))}
-      </ul>
     </main>
   );
 }

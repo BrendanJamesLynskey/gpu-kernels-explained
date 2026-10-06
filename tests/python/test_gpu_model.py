@@ -297,3 +297,150 @@ def test_double_buffer_hides_the_loads_behind_compute():
     # load-bound case: the loads set the pace
     r = g.tile_timeline(8, 4.5, 1.25, 0.5, 2)
     assert r["total"] == 8 * 4.5 + 1.25 + 0.5
+
+
+def test_timeline_steps_follow_the_segments():
+    tl = g.tile_timeline(6, 2.0, 3.0, 1.0, 2)
+    st = g.timeline_steps(tl)
+    assert st[0] == {"t": 0.0, "load": 0, "compute": None, "store": None, "stored": 0, "compute_busy": 0.0}
+    # double buffering: tile 1 loads while tile 0 computes
+    assert st[1]["t"] == 2.0 and st[1]["load"] == 1 and st[1]["compute"] == 0
+    last = st[-1]
+    assert last["t"] == tl["total"] and last["stored"] == 6
+    assert last["load"] is None and last["compute"] is None and last["store"] is None
+    assert last["compute_busy"] == tl["compute_busy"]
+
+
+# --- chapter 7: GEMM step by step --------------------------------------------------------
+
+
+def test_gemm_variants_raise_the_arithmetic_intensity():
+    # AI at L2 is about b/4 flop/B for b x b FP32 blocks (b/2 for BF16)
+    ai = [g.gemm_variant(A100, v)["ai"]["l2"] for v in g.GEMM_ORDER]
+    assert ai == sorted(ai)
+    assert ai[0] == 2 * 4096**3 / (8 * 4096**3 + 4 * 4096**2)
+    assert abs(ai[1] - 8) < 0.05 and abs(ai[2] - 32) < 0.5 and abs(ai[3] - 64) < 2
+
+
+def test_fp32_gemm_variants_agree_with_gemm_traffic():
+    for vid, (bm, tm) in {"smem": (32, 1), "regs": (128, 8)}.items():
+        v = g.gemm_variant(A100, vid)
+        t = g.gemm_traffic(A100, 4096, 4096, 4096, bm, bm, tm, tm)
+        assert v["bytes"] == {"smem": t["bytes"]["smem"], "l2": t["bytes"]["l2"], "hbm": t["bytes"]["hbm"]}
+
+
+def test_register_blocking_makes_the_a100_compute_bound():
+    assert g.gemm_variant(A100, "naive")["bound"] == "hbm"
+    assert g.gemm_variant(A100, "smem")["bound"] == "smem"
+    assert g.gemm_variant(A100, "regs")["bound"] == "compute"
+    # the tensor cores need ~200 flop/B from HBM: 128 x 128 BF16 tiles give ~62
+    tc = g.gemm_variant(A100, "tensor")
+    assert tc["bound"] == "hbm" and tc["achieved"] > g.gemm_variant(A100, "regs")["achieved"]
+
+
+def test_gemm_march_counts():
+    for vid in g.GEMM_ORDER:
+        m = g.gemm_march(vid)
+        cfg = g.GEMM_MARCH[vid]
+        assert len(m) == 1 + (16 // cfg["bm"]) * (16 // cfg["bn"]) * 4
+        assert m[-1]["flops"] == 2 * 16**3
+    # tiled: each element of A is loaded once per block column (16/bn times)
+    assert g.gemm_march("smem")[-1]["global"] == 4 * (2 * 16 * 16 * 4) + 4 * 256
+    assert g.gemm_march("naive")[-1]["global"] == 4 * 2 * 16**3 + 4 * 256
+
+
+# --- chapter 8: reductions ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("kind", g.REDUCE_KINDS)
+def test_every_reduction_gets_the_sum(kind):
+    r = g.reduce_steps(kind)
+    assert r["result"] == r["expected"] == sum(g.int_values(64, 7))
+    assert len(r["steps"]) == 7  # data + log2(64) steps (5 shuffles + 1 combine)
+
+
+def test_reduction_divergence_and_bank_conflicts():
+    div = g.reduce_steps("divergent")["steps"][1]
+    assert div["warps_divergent"] == 2 and div["degree"] == 1
+    strided = g.reduce_steps("strided")["steps"][1]
+    assert strided["warps_divergent"] == 0 and strided["degree"] == 2
+    seq = g.reduce_steps("sequential")["steps"][1]
+    assert seq["warps_active"] == 1 and seq["warps_divergent"] == 0 and seq["degree"] == 1
+    sh = g.reduce_steps("shuffle")
+    assert sh["steps"][-1]["smem"] == 4 and sh["steps"][-1]["syncs"] == 1
+    assert g.reduce_steps("sequential")["steps"][-1]["syncs"] == 6
+
+
+def test_int_values_matches_lane_data():
+    assert g.int_values(32, 2024) == g.lane_data(2024)
+
+
+# --- chapter 9: online softmax and FlashAttention ------------------------------------------
+
+
+@pytest.mark.parametrize("block", [2, 4, 8, 16])
+def test_online_softmax_equals_ordinary_softmax(block):
+    x = g.softmax_inputs()
+    o = g.online_softmax(x, block)
+    assert o["m"] == max(x)
+    assert o["max_diff"] < 1e-15
+    assert abs(sum(o["online"]) - 1) < 1e-15
+    # the identity: l = sum exp(x - m), whatever the blocking
+    assert abs(o["l"] - sum(math.exp(v - max(x)) for v in x)) < 1e-14
+
+
+def test_online_softmax_rescales_when_the_maximum_grows():
+    o = g.online_softmax(g.softmax_inputs(), 4)
+    s = o["steps"]
+    assert s[0]["m_prev"] is None and s[0]["scale"] == 0.0
+    for a, b in zip(s, s[1:]):
+        assert b["m"] >= a["m"]
+        assert b["scale"] == math.exp(a["m"] - b["m"])
+        assert b["l"] == b["l_prev"] * b["scale"] + b["block_sum"]
+
+
+def test_attention_traffic_closed_forms():
+    a = g.attention_traffic(4096, 64, 128, 128)
+    assert a["standard"] == 2 * (4 * 4096 * 64 + 4 * 4096**2)
+    assert a["flash"] == 2 * (2 * 4096 * 64 + 2 * 4096 * 64 * 32)
+    assert a["ratio"] > 3.5
+    f = g.flash_steps(512, 64, 64, 64)
+    assert len(f["steps"]) == 1 + 64
+    assert f["steps"][-1]["flash"] == f["traffic"]["flash"]
+    assert f["steps"][-1]["standard"] == f["traffic"]["standard"]
+    assert f["steps"][-1]["flash_l2"] == f["traffic"]["compulsory"] == 2 * 4 * 512 * 64
+
+
+# --- chapter 10: split-K ------------------------------------------------------------------
+
+
+def test_split_k_fills_the_gpu_until_a_second_wave():
+    s = {r["splits"]: r for r in g.split_k_sweep(A100)}
+    assert s[1]["blocks"] == 16 and s[1]["waves"] == 1
+    assert s[6]["blocks"] == 96 and s[6]["waves"] == 1
+    assert s[7]["waves"] == 2
+    best = min(s.values(), key=lambda r: r["total"])
+    assert best["splits"] == 6
+    assert s[1]["extra_bytes"] == 0 and s[2]["extra_bytes"] == 2 * 4 * 512 * 512 * 2
+
+
+# --- chapter 11: quantised kernels ---------------------------------------------------------
+
+
+def test_quantised_weights_cut_decode_time_by_the_byte_ratio():
+    b = g.quant_gemm(A100, "bf16", 8192, 8192, 1)
+    q = g.quant_gemm(A100, "int4", 8192, 8192, 1)
+    assert b["weight_bytes"] == 2 * 8192 * 8192
+    assert q["weight_bytes"] == 8192 * 8192 // 2 + 2 * 8192 * 8192 // 128
+    assert b["bound"] == q["bound"] == "memory"
+    assert 3.8 < b["total"] / q["total"] < 4.0
+    # at a large batch every format is compute-bound; W8A8 runs at the INT8 peak
+    assert g.quant_gemm(A100, "int4", 8192, 8192, 1024)["bound"] == "compute"
+    assert g.quant_gemm(A100, "w8a8", 8192, 8192, 1024)["peak"] == 624e12
+
+
+def test_dequant_in_registers_is_exact():
+    d = g.dequant_steps()
+    assert [(d["word"] >> (4 * i)) & 0xF for i in range(8)] == d["q"]
+    assert d["result"] == sum((q - 8) * d["scale"] * x for q, x in zip(d["q"], d["x"]))
+    assert len(d["steps"]) == 1 + 3 * 8

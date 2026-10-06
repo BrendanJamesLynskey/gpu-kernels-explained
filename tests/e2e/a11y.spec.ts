@@ -16,6 +16,11 @@ const PAGES = [
   "/learn/04-coalescing",
   "/learn/05-bank-conflicts",
   "/learn/06-occupancy",
+  "/learn/07-gemm",
+  "/learn/08-reductions",
+  "/learn/09-softmax-and-flashattention",
+  "/learn/10-split-k-and-overlap",
+  "/learn/11-quantised-kernels",
 ];
 
 for (const [scheme, width] of [

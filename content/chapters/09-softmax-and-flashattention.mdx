@@ -1,0 +1,102 @@
+<FlashWidget>
+  <Eq
+    label="HBM bytes of standard attention grow with N squared; FlashAttention's with N d times the number of query blocks"
+    tex="\begin{gathered} B_{\text{std}} = e\,(4Nd + \htmlClass{hl-std}{4N^2}) \\ B_{\text{flash}} = e\,\bigl(2Nd + \htmlClass{hl-kv}{2Nd \cdot N/B_r}\bigr) \;\ge\; \htmlClass{hl-flashl2}{4eNd} \end{gathered}"
+  />
+</FlashWidget>
+
+<Layer kind="concept">
+
+Attention computes $S = QK^\top$ (an $N \times N$ matrix of scores for a sequence of $N$ tokens), takes a softmax along each row to get $P$, and returns $O = PV$. Done as three separate kernels, **standard attention** writes $S$ to HBM, reads it back for the softmax, writes $P$, and reads it again for the product: four passes over $N^2$ numbers. At $N = 4096$ and head dimension 64 that is <V of="a100.attn.n4096_d64_b128.standard" fmt="bytes" /> for one head, almost all of it the score matrix.
+
+**FlashAttention** (Dao et al., 2022) never stores $S$. It takes a block of $B_r$ queries, streams the keys and values past in blocks of $B_c$, and for each pair computes the $B_r \times B_c$ score tile on chip, folds it into a running output, and discards it. The animation is FlashAttention-2's loop order (Dao, 2023): one row of tiles per query block. What goes to and from HBM is $Q$ and $O$ once, and $K$ and $V$ once per query block, between <V of="a100.attn.n4096_d64_b128.compulsory" fmt="bytes" /> (if every re-read of $K$ and $V$ hits L2, the "K and V from L2" bar) and <V of="a100.attn.n4096_d64_b128.flash" fmt="bytes" /> (if none does) at the same size.
+
+The obstacle is the softmax: each output row needs $\sum_j e^{s_j}$ over the _whole_ row before any of it can be normalised, and FlashAttention sees the row a tile at a time. The trick that makes it possible is **online softmax**.
+
+</Layer>
+
+<SoftmaxWidget>
+  <Eq
+    label="Online softmax: the new maximum is the larger of the old one and the block's; the running sum is rescaled by e to the old minus new maximum, then the block's terms are added"
+    tex="m' = \max\bigl(m,\ \max_j x_j\bigr), \qquad \htmlClass{hl-l}{\ell' = \ell \cdot \htmlClass{hl-scale}{e^{\,m - m'}} + \textstyle\sum_j e^{\,x_j - m'}}"
+  />
+</SoftmaxWidget>
+
+<Layer kind="concept">
+
+A safe softmax subtracts the row's maximum before exponentiating, so nothing overflows: $p_i = e^{x_i - m} / \sum_j e^{x_j - m}$. That seems to need two passes (find $m$, then sum), and a third to normalise. Milakov and Gimelshein (2018) showed that one pass is enough: keep a running maximum $m$ and a running sum $\ell$ of $e^{x - m}$. When a new block brings a larger maximum $m'$, every term already in $\ell$ was computed against the old $m$ and is too large by $e^{m' - m}$, the same factor for all of them, so multiplying $\ell$ by $e^{m - m'}$ fixes them all at once. Step through the animation and watch the bars below the scores: they all shrink together when the maximum rises.
+
+FlashAttention keeps exactly these two numbers per query row, and rescales its partial output row $O_i$ by the same factor, which is why it can stream $K$ and $V$ through without ever seeing a whole row of scores.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The byte counts are the model's for one head, forward pass, FP16/BF16 values: standard attention as the paper's Algorithm 0 (write $S$, read it, write $P$, read it), FlashAttention-2 with square blocks, the two bounds for $K$ and $V$ re-reads. Real kernels sit between the bounds, and closer to the lower one when the heads in flight share L2. The on-chip working set (the $Q$, $K$ and $V$ tiles, the score tile and the output accumulator in FP32) must fit in shared memory and registers; on the A100, $B = 128$ with $d = 128$ comes to <V of="a100.attn.n4096_d128_b128.onchip" fmt="kib" />, more than shared memory alone holds, so real kernels keep the score tile and the accumulator in registers and choose block sizes per head dimension.
+
+</Callout>
+
+<Layer kind="maths">
+
+**Online softmax is exact.** Let $m_k$ and $\ell_k$ be the maximum and the sum after $k$ blocks. Suppose $\ell_k = \sum_{j \le k\text{-th block}} e^{x_j - m_k}$. After the next block, with $m_{k+1} = \max(m_k, \max_{\text{block}} x_j)$,
+
+$$
+\ell_k\, e^{m_k - m_{k+1}} + \sum_{\text{block}} e^{x_j - m_{k+1}}
+= \sum_{\text{earlier}} e^{x_j - m_k + m_k - m_{k+1}} + \sum_{\text{block}} e^{x_j - m_{k+1}}
+= \sum_{\text{all so far}} e^{x_j - m_{k+1}} ,
+$$
+
+so by induction $\ell$ ends as $\sum_j e^{x_j - m}$ with $m$ the true maximum, and $p_i = e^{x_i - m}/\ell$ is the ordinary softmax, in exact arithmetic. In floating point the two differ only by the rounding of the different order of additions: the animation's last frame shows the largest difference, of order $10^{-16}$.
+
+**HBM traffic.** With $e$ bytes per value, standard attention moves $e\,(2Nd + 4N^2 + 2Nd)$: read $Q$ and $K$, write and read $S$, write and read $P$, read $V$, write $O$. FlashAttention-2 reads $Q$ once ($eNd$), writes $O$ once ($eNd$) and reads $K$ and $V$ ($2eNd$) once for each of the $N/B_r$ query blocks:
+
+$$
+B_{\text{flash}} = e\,\Bigl(2Nd + \frac{2N^2 d}{B_r}\Bigr) .
+$$
+
+The $N^2$ term survives, but divided by $B_r/d$ and halved, and with L2 reuse it disappears: the floor is $4eNd$, every value read or written once. This is the paper's $\Theta(N^2 d^2 / M)$ result with $B_r \propto M/d$ for on-chip memory $M$.
+
+</Layer>
+
+<Layer kind="code">
+
+The online softmax step, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts):
+
+```ts
+const mNew = m > bmax ? m : bmax;
+const scale = Math.exp(m - mNew);
+let s = 0.0;
+for (const v of blk) s += Math.exp(v - mNew);
+const lPrev = l;
+l = l * scale + s;
+```
+
+And the bytes FlashAttention-2 moves per tile (no L2 reuse in `moved`, every re-read an L2 hit in `once`):
+
+```ts
+if (j === 0) {
+  moved += eb * br * d;
+  once += eb * br * d;
+}
+moved += 2 * eb * bc * d;
+if (i === 0) once += 2 * eb * bc * d;
+```
+
+</Layer>
+
+## One head, forward pass (model, BF16, blocks of 128)
+
+| Sequence × head dim | Standard attention                                        | FlashAttention, no L2 reuse                            | Every value once (floor)                                    |
+| ------------------- | --------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------- |
+| 4096 × 64           | <V of="a100.attn.n4096_d64_b128.standard" fmt="bytes" />  | <V of="a100.attn.n4096_d64_b128.flash" fmt="bytes" />  | <V of="a100.attn.n4096_d64_b128.compulsory" fmt="bytes" />  |
+| 4096 × 128          | <V of="a100.attn.n4096_d128_b128.standard" fmt="bytes" /> | <V of="a100.attn.n4096_d128_b128.flash" fmt="bytes" /> | <V of="a100.attn.n4096_d128_b128.compulsory" fmt="bytes" /> |
+| 8192 × 128          | <V of="a100.attn.n8192_d128_b128.standard" fmt="bytes" /> | <V of="a100.attn.n8192_d128_b128.flash" fmt="bytes" /> | <V of="a100.attn.n8192_d128_b128.compulsory" fmt="bytes" /> |
+
+<Callout kind="deeper">
+
+- Dao, Fu, Ermon, Rudra and Ré, [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135) (2022); Dao, [FlashAttention-2: Faster Attention with Better Parallelism and Work Partitioning](https://arxiv.org/abs/2307.08691) (2023); Shah et al., [FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision](https://arxiv.org/abs/2407.08608) (2024), for Hopper.
+- Milakov and Gimelshein, [Online normalizer calculation for softmax](https://arxiv.org/abs/1805.02867) (2018).
+- NVIDIA GPU series: [TMA: the Tensor Memory Accelerator](https://brendanjameslynskey.github.io/NVIDIA_GPU_31_Hopper_Low_Level/#slide-06), which FlashAttention-3 uses to stream tiles.
+- [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) covers attention's KV cache and why decode is memory-bound; the [Transformer Decoder Explainer](https://transformer-decoder-explained.vercel.app/) shows attention itself.
+
+</Callout>

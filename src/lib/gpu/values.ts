@@ -17,11 +17,19 @@ import {
 } from "@/lib/format";
 
 import {
+  GEMM_ORDER,
   KERNELS,
+  QUANT_ORDER,
+  REDUCE_KINDS,
+  attentionTraffic,
   derived,
+  gemmVariant,
   kernelTime,
   preset,
+  quantSweep,
+  reduceSteps,
   rooflineSweep,
+  splitKSweep,
   type PresetId,
 } from "./model";
 
@@ -45,7 +53,29 @@ function tree(pid: PresetId): Record<string, unknown> {
     kernels[k] = kernelTime(p, kern);
   const sweep: Record<string, unknown> = {};
   for (const s of rooflineSweep(p)) sweep[String(s.tile)] = s;
-  return { ...p, ...d, kernels, sweep };
+  const gemm: Record<string, unknown> = {};
+  for (const v of GEMM_ORDER) gemm[v] = gemmVariant(p, v);
+  const splitk: Record<string, unknown> = {};
+  for (const r of splitKSweep(p)) splitk[String(r.splits)] = r;
+  const quant: Record<string, unknown> = {};
+  for (const f of QUANT_ORDER) {
+    const byBatch: Record<string, unknown> = {};
+    for (const r of quantSweep(p, f)) byBatch[String(r.batch)] = r;
+    quant[f] = byBatch;
+  }
+  // attention traffic does not depend on the GPU: the same under each preset
+  const attn: Record<string, unknown> = {};
+  for (const n of [1024, 4096, 8192])
+    for (const dd of [64, 128])
+      for (const b of [64, 128])
+        attn[`n${n}_d${dd}_b${b}`] = attentionTraffic(n, dd, b, b);
+  // the reductions' final counts (also GPU-independent)
+  const reduce: Record<string, unknown> = {};
+  for (const k of REDUCE_KINDS) {
+    const st = reduceSteps(k).steps;
+    reduce[k] = st[st.length - 1];
+  }
+  return { ...p, ...d, kernels, sweep, gemm, splitk, quant, attn, reduce };
 }
 
 const CACHE = new Map<PresetId, Record<string, unknown>>();

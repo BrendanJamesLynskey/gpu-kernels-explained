@@ -10,13 +10,31 @@ import fx from "../fixtures/gpu_fixtures.json";
 import {
   bankCaption,
   coalesceCaption,
+  dequantCaption,
+  flashCaption,
   flowCaption,
+  marchCaption,
   occupancyCaption,
+  quantCaption,
+  reduceCaption,
   simtCaption,
+  softmaxCaption,
+  splitKCaption,
   sweepCaption,
+  timelineCaption,
 } from "@/lib/gpu/captions";
 import {
+  GEMM_MARCH,
   preset,
+  type AttentionTraffic,
+  type Dequant,
+  type FlashStep,
+  type MarchStep,
+  type OnlineSoftmax,
+  type QuantGemm,
+  type ReduceResult,
+  type SplitK,
+  type TimelineStep,
   type BankResult,
   type CoalesceResult,
   type FlowStep,
@@ -157,4 +175,131 @@ test("occupancy: 256 threads, 64 registers, 48 KB on the A100", async ({
     "data-limit",
     "true",
   );
+});
+
+test("GEMM: the shared-memory march, then register blocking", async ({
+  page,
+}) => {
+  await page.goto("/learn/07-gemm");
+  const fig = page.getByTestId("gemm-widget");
+  const m = fx.gemmMarch.smem as unknown as MarchStep[];
+  for (const s of [0, 1, 4, 64]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(
+      marchCaption("smem", GEMM_MARCH.smem, m[s]!, 16, 4),
+    );
+  }
+  await fig.getByRole("radio", { name: "register blocking" }).click();
+  const r = fx.gemmMarch.regs as unknown as MarchStep[];
+  await show(fig, 16);
+  await expect(fig.getByTestId("caption")).toHaveText(
+    marchCaption("regs", GEMM_MARCH.regs, r[16]!, 16, 4),
+  );
+  await expect(fig.locator("[data-variant='regs']")).toHaveAttribute(
+    "data-current",
+    "true",
+  );
+});
+
+test("reductions: sequential addressing, then shuffles", async ({ page }) => {
+  await page.goto("/learn/08-reductions");
+  const fig = page.getByTestId("reduction-widget");
+  const seq = fx.reduce.sequential as unknown as ReduceResult;
+  for (const s of [0, 1, 3, 6]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(reduceCaption(seq, s));
+  }
+  await fig.getByRole("radio", { name: "warp shuffle" }).click();
+  const sh = fx.reduce.shuffle as unknown as ReduceResult;
+  for (const s of [1, 6]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(reduceCaption(sh, s));
+  }
+});
+
+test("FlashAttention: N = 1024, d = 64, blocks of 128", async ({ page }) => {
+  await page.goto("/learn/09-softmax-and-flashattention");
+  const fig = page.getByTestId("flash-widget");
+  const f = fx.flash.find((x) => x.args.join() === "1024,64,128,128")!
+    .out as unknown as { traffic: AttentionTraffic; steps: FlashStep[] };
+  for (const s of [0, 1, 8, 64]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(
+      flashCaption(f.traffic, f.steps[s]!),
+    );
+  }
+  await expect(fig.locator("[data-tile='now']")).toHaveCount(1);
+});
+
+test("online softmax: blocks of 4, then 8", async ({ page }) => {
+  await page.goto("/learn/09-softmax-and-flashattention");
+  const fig = page.getByTestId("softmax-widget");
+  const o4 = fx.softmax.find((x) => x.seed === 127 && x.block === 4)!
+    .out as unknown as OnlineSoftmax;
+  for (const s of [0, 1, 2, 5]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(softmaxCaption(o4, s));
+  }
+  await fig.getByRole("radio", { name: "8" }).first().click();
+  const o8 = fx.softmax.find((x) => x.seed === 127 && x.block === 8)!
+    .out as unknown as OnlineSoftmax;
+  await show(fig, 3);
+  await expect(fig.getByTestId("caption")).toHaveText(softmaxCaption(o8, 3));
+  await expect(fig.locator("[data-ordinary]")).toHaveCount(16);
+});
+
+test("overlap: double buffering the compute-heavy tiles", async ({ page }) => {
+  await page.goto("/learn/10-split-k-and-overlap");
+  const fig = page.getByTestId("timeline-widget");
+  const t = fx.timelineSteps.find((x) => x.args.join() === "6,2,3,1,2")!
+    .steps as unknown as TimelineStep[];
+  for (const s of [0, 1, 5, t.length - 1]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(
+      timelineCaption(t, s, 6),
+    );
+  }
+  await fig.getByRole("radio", { name: "1" }).first().click();
+  const one = fx.timelineSteps.find((x) => x.args.join() === "6,2,3,1,1")!
+    .steps as unknown as TimelineStep[];
+  await show(fig, one.length - 1);
+  await expect(fig.getByTestId("caption")).toHaveText(
+    timelineCaption(one, one.length - 1, 6),
+  );
+});
+
+test("split-K on the A100", async ({ page }) => {
+  await page.goto("/learn/10-split-k-and-overlap");
+  const fig = page.getByTestId("splitk-widget");
+  const sw = PY.splitK as unknown as SplitK[];
+  for (const s of [0, 5, 6, 9]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(
+      splitKCaption(sw[s]!, sw[0]!, 108),
+    );
+  }
+  await show(fig, 5);
+  await expect(fig.locator("[data-sm][data-waves='0']")).toHaveCount(12);
+});
+
+test("dequantising in registers, then the quantised layer", async ({
+  page,
+}) => {
+  await page.goto("/learn/11-quantised-kernels");
+  const fig = page.getByTestId("dequant-widget");
+  const d = fx.dequant.find((x) => x.seed === 11 && x.scale === 0.0625)!
+    .out as unknown as Dequant;
+  for (const s of [0, 1, 2, 3, 24]) {
+    await show(fig, s);
+    await expect(fig.getByTestId("caption")).toHaveText(dequantCaption(d, s));
+  }
+  const q = page.getByTestId("quant-widget");
+  const rows = (i: number) =>
+    (["bf16", "int8", "int4", "w8a8"] as const).map(
+      (f) => (PY.quant as unknown as Record<string, QuantGemm[]>)[f]![i]!,
+    );
+  for (const s of [0, 6, 10]) {
+    await show(q, s);
+    await expect(q.getByTestId("caption")).toHaveText(quantCaption(rows(s)));
+  }
 });

@@ -47,6 +47,36 @@ export const SECTIONS = [
     summary:
       "Registers, shared memory and warp slots decide how many blocks share an SM, and so how much latency it can hide.",
   },
+  {
+    slug: "07-gemm",
+    title: "GEMM, step by step",
+    summary:
+      "Naive, tiled in shared memory, register-blocked, tensor cores: each step reuses data closer to the ALUs and raises the arithmetic intensity.",
+  },
+  {
+    slug: "08-reductions",
+    title: "Reductions and warp shuffles",
+    summary:
+      "Summing a block's values as a tree in shared memory, three ways, then register to register with warp shuffles.",
+  },
+  {
+    slug: "09-softmax-and-flashattention",
+    title: "Softmax and FlashAttention",
+    summary:
+      "Online softmax keeps a running maximum and rescales; FlashAttention uses it to never write the score matrix to HBM.",
+  },
+  {
+    slug: "10-split-k-and-overlap",
+    title: "Split-K, streams and overlap",
+    summary:
+      "Double buffering hides copies behind compute; split-K makes enough blocks to fill the GPU when the output is small.",
+  },
+  {
+    slug: "11-quantised-kernels",
+    title: "Quantised kernels",
+    summary:
+      "Low-precision weights cut the bytes a decode step reads; the kernel dequantises them in registers, just before the multiply.",
+  },
 ] as const;
 
 export type SectionSlug = (typeof SECTIONS)[number]["slug"];

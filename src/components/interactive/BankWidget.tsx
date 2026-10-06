@@ -13,6 +13,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import { AnimationPanel } from "@/components/anim/AnimationPanel";
 import { useStepper } from "@/components/anim/useStepper";
 import { Segmented, Slider, Stat } from "@/components/ui/Controls";
+import { useSvgFont } from "@/components/viz/useSvgFont";
 import { pct } from "@/lib/format";
 import { bankCaption, bankStepCount } from "@/lib/gpu/captions";
 import { bankSteps, type BankPattern } from "@/lib/gpu/model";
@@ -34,6 +35,8 @@ export default function BankWidget({
   const [stride, setStride] = useState(2);
   const [hover, setHover] = useState<string | null>(null);
   const hatchId = useId().replace(/:/g, "");
+  const font = useSvgFont(W);
+  const fs = font.fs;
 
   const r = useMemo(
     () => bankSteps(pattern, pad, stride),
@@ -80,6 +83,7 @@ export default function BankWidget({
   const visual = (
     <div className="mx-auto max-w-md">
       <svg
+        ref={font.ref}
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
@@ -94,7 +98,8 @@ export default function BankWidget({
             x={LEFT + b * C + C / 2}
             y={10}
             textAnchor="middle"
-            className="fill-neutral-500 font-mono text-[6.5px] dark:fill-neutral-400"
+            style={{ fontSize: fs(6.5) }}
+            className="fill-neutral-500 font-mono dark:fill-neutral-400"
           >
             {b}
           </text>
@@ -102,7 +107,8 @@ export default function BankWidget({
         <text
           x={0}
           y={10}
-          className="fill-neutral-600 font-mono text-[6.5px] dark:fill-neutral-400"
+          style={{ fontSize: fs(6.5) }}
+          className="fill-neutral-600 font-mono dark:fill-neutral-400"
         >
           bank
         </text>
@@ -114,7 +120,8 @@ export default function BankWidget({
                 x={LEFT - 3}
                 y={14 + row * C + 6}
                 textAnchor="end"
-                className="fill-neutral-500 font-mono text-[6px] dark:fill-neutral-400"
+                style={{ fontSize: fs(6) }}
+                className="fill-neutral-500 font-mono dark:fill-neutral-400"
               >
                 {row * 32}
               </text>
@@ -159,12 +166,15 @@ export default function BankWidget({
         <text
           x={0}
           y={heatTop - 6}
-          className="fill-neutral-700 text-[7.5px] dark:fill-neutral-300"
+          style={{ fontSize: fs(7.5) }}
+          className="fill-neutral-700 dark:fill-neutral-300"
         >
-          words queued per bank{" "}
+          {font.narrow ? "queued per bank " : "words queued per bank "}
           {requesting
             ? "(requests arriving)"
-            : `(after pass ${passesDone} of ${r.degree})`}
+            : font.narrow
+              ? `(pass ${passesDone}/${r.degree})`
+              : `(after pass ${passesDone} of ${r.degree})`}
         </text>
         {view.queues.map((q, b) => {
           const total = requesting ? (reqLoad![b] as number) : q.length;

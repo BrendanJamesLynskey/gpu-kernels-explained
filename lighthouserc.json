@@ -8,7 +8,9 @@
         "http://localhost:3000/gpus",
         "http://localhost:3000/learn/01-memory-hierarchy",
         "http://localhost:3000/learn/03-warps-and-divergence",
-        "http://localhost:3000/learn/06-occupancy"
+        "http://localhost:3000/learn/06-occupancy",
+        "http://localhost:3000/learn/07-gemm",
+        "http://localhost:3000/learn/09-softmax-and-flashattention"
       ],
       "numberOfRuns": 3
     },

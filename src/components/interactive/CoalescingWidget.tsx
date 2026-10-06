@@ -102,12 +102,12 @@ export default function CoalescingWidget({
           return (
             <div key={ln} className="flex items-center gap-2">
               {gap > 0 && (
-                <span className="rounded bg-neutral-200 px-1 font-mono text-[0.6rem] text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+                <span className="rounded bg-neutral-200 px-1 font-mono text-[0.7rem] text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
                   +{gap} line{gap === 1 ? "" : "s"}
                 </span>
               )}
               <div>
-                <div className="font-mono text-[0.6rem] text-neutral-500 dark:text-neutral-400">
+                <div className="font-mono text-[0.7rem] text-neutral-500 dark:text-neutral-400">
                   byte {ln * 128}
                 </div>
                 <div className="flex gap-0.5">
@@ -159,7 +159,7 @@ export default function CoalescingWidget({
                             );
                           })}
                         </div>
-                        <span className="mt-0.5 h-3 font-mono text-[0.6rem] leading-3 text-neutral-600 dark:text-neutral-400">
+                        <span className="mt-0.5 h-3 font-mono text-[0.7rem] leading-3 text-neutral-600 dark:text-neutral-400">
                           {who ? `L${laneRuns(who)}` : ""}
                         </span>
                       </div>
