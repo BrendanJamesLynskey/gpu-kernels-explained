@@ -30,6 +30,12 @@ export type Stepper = {
   playing: boolean;
   speed: Speed;
   reducedMotion: boolean;
+  /**
+   * The parameters (`resetKey` and n) the animation last restarted for: set
+   * by the reset itself, so a test can wait for a parameter change to have
+   * taken effect before it scrubs.
+   */
+  appliedKey: string;
   play: () => void;
   pause: () => void;
   toggle: () => void;
@@ -63,6 +69,7 @@ export function useStepper(
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>(1);
   const [reducedMotion, setReduced] = useState(true);
+  const [appliedKey, setAppliedKey] = useState("");
   const userPaused = useRef(false);
   const visible = useRef(false);
   const observer = useRef<IntersectionObserver | null>(null);
@@ -81,6 +88,7 @@ export function useStepper(
     show(START);
     userPaused.current = false;
     setPlaying(!prefersReducedMotion() && visible.current);
+    setAppliedKey(`${resetKey}|${n}`);
   }, [resetKey, n, show]);
 
   // The clock.
@@ -158,6 +166,7 @@ export function useStepper(
     playing,
     speed,
     reducedMotion,
+    appliedKey,
     play,
     pause,
     toggle: () => (playing ? pause() : play()),
