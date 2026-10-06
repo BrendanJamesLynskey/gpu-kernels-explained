@@ -16,7 +16,9 @@ shows how a model is served, [LLM Architectures Explained](https://llm-architect
 shows how the models differ, and this site is the layer underneath: the
 kernels. They share one design system and link to each other from the
 header ("Decoder · Inference · Architectures · Kernels · Numerics ·
-Silicon"; the last two are coming).
+Silicon"; the last is coming).
+[Numerics Explained](https://numerics-explained.vercel.app/) covers the
+accuracy side of the quantised kernels in chapter 11.
 
 **Live:** [gpu-kernels-explained.vercel.app](https://gpu-kernels-explained.vercel.app/)
 

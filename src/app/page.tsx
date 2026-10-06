@@ -2,7 +2,12 @@ import Link from "next/link";
 
 import { BandwidthLadder } from "@/components/viz/BandwidthLadder";
 import { SECTIONS } from "@/lib/mdx/sections";
-import { ARCHITECTURES_URL, DECODER_URL, INFERENCE_URL } from "@/lib/site";
+import {
+  ARCHITECTURES_URL,
+  DECODER_URL,
+  INFERENCE_URL,
+  NUMERICS_URL,
+} from "@/lib/site";
 import { formatValue, lookup } from "@/lib/gpu/values";
 
 /**
@@ -92,15 +97,22 @@ export default function HomePage(): JSX.Element {
         >
           LLM Inference Explained
         </a>{" "}
-        (serving it) and{" "}
+        (serving it),{" "}
         <a
           href={ARCHITECTURES_URL}
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
           LLM Architectures Explained
         </a>{" "}
-        (how the models differ). This site is the layer underneath: the kernels.
-        How it was built, and how to check it:{" "}
+        (how the models differ) and{" "}
+        <a
+          href={NUMERICS_URL}
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Numerics Explained
+        </a>{" "}
+        (the numbers themselves). This site is the layer underneath: the
+        kernels. How it was built, and how to check it:{" "}
         <Link
           href="/about"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"

@@ -44,8 +44,8 @@ const SITES = [
     key: "numerics",
     label: "Numerics",
     href: "https://numerics-explained.vercel.app",
-    title: "Numerics Explained: number formats and quantisation (coming soon)",
-    live: false,
+    title: "Numerics Explained: number formats and quantisation",
+    live: true,
   },
   {
     key: "silicon",

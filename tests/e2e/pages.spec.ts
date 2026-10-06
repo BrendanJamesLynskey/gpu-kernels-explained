@@ -75,8 +75,12 @@ test("the six-way site switch: a row on desktop, a dropdown on phones", async ({
     "aria-current",
     "true",
   );
-  await expect(row.getByText("Numerics")).toBeVisible();
-  await expect(row.getByRole("link", { name: /Numerics/ })).toHaveCount(0);
+  await expect(row.getByRole("link", { name: "Numerics" })).toHaveAttribute(
+    "href",
+    "https://numerics-explained.vercel.app",
+  );
+  await expect(row.getByText("Silicon")).toBeVisible();
+  await expect(row.getByRole("link", { name: /Silicon/ })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 800 });
   await expect(row).toBeHidden();
   const compact = page.locator("[data-site-switch='compact']");
