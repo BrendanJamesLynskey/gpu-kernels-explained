@@ -72,7 +72,10 @@ export default function AboutPage(): JSX.Element {
           and the roofline position, occupancy, bank conflicts, coalescing
           (32-byte sectors per warp request), the active mask of every
           instruction a diverging warp issues, and a load / compute / store
-          timeline per tile. It is not cycle-accurate.
+          timeline per tile; and, for the later chapters, a GEMM four ways, the
+          steps of four reductions, online softmax and FlashAttention&apos;s
+          memory traffic, split-K and quantised layers. It is not
+          cycle-accurate.
         </p>
         <ul>
           <li>
@@ -123,8 +126,10 @@ export default function AboutPage(): JSX.Element {
             </a>{" "}
             writes the reference&apos;s results over grids of every parameter,
             and the unit tests require the port to reproduce all of them
-            exactly, with no tolerance. CI fails if the fixtures are out of
-            date.
+            exactly, with no tolerance (the online softmax, which calls{" "}
+            <code>exp</code>, to a relative 10<sup>−14</sup>, because
+            JavaScript&apos;s and the C library&apos;s <code>exp</code> can
+            differ in the last bit). CI fails if the fixtures are out of date.
           </li>
           <li>
             <strong>Animations from the model.</strong> Every animation draws a

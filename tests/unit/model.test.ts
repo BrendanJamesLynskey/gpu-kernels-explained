@@ -7,8 +7,23 @@ import { describe, expect, it } from "vitest";
 import fx from "../fixtures/gpu_fixtures.json";
 
 import {
+  GEMM_ORDER,
   KERNELS,
+  attentionTraffic,
   bankSteps,
+  dequantSteps,
+  flashSteps,
+  gemmMarch,
+  gemmVariant,
+  intValues,
+  onlineSoftmax,
+  quantSweep,
+  reduceSteps,
+  softmaxInputs,
+  splitKSweep,
+  timelineSteps,
+  QUANT_ORDER,
+  REDUCE_KINDS,
   coalesceSteps,
   derived,
   flowSteps,
@@ -67,6 +82,21 @@ for (const pid of ["a100", "h100"] as const) {
       for (const o of f.occupancy)
         expect(occupancy(p, o.threads, o.regs, o.smem)).toEqual(o.out);
     });
+    it("costs the four GEMM variants identically", () => {
+      for (const v of GEMM_ORDER)
+        expect(gemmVariant(p, v), v).toEqual(
+          (f.gemmVariants as Record<string, unknown>)[v],
+        );
+    });
+    it("sweeps split-K identically", () => {
+      expect(splitKSweep(p)).toEqual(f.splitK);
+    });
+    it("sweeps every quantised format identically", () => {
+      for (const q of QUANT_ORDER)
+        expect(quantSweep(p, q), q).toEqual(
+          (f.quant as Record<string, unknown>)[q],
+        );
+    });
     it("steps the block placement identically", () => {
       for (const o of f.occupancySteps)
         expect(occupancySteps(p, o.threads, o.regs, o.smem)).toEqual(o.out);
@@ -105,5 +135,86 @@ describe("SIMT, coalescing, banks and timelines: parity", () => {
       ];
       expect(tileTimeline(n, tl, tc, ts, buf)).toEqual(t.out);
     }
+  });
+});
+
+/**
+ * Deep comparison with a relative tolerance for numbers: the softmax uses
+ * exp, and V8's Math.exp and the C library's exp may differ in the last
+ * bit (house rule: transcendentals with a tolerance, everything else exact).
+ */
+function expectClose(a: unknown, b: unknown, path = "$"): void {
+  if (typeof a === "number" && typeof b === "number") {
+    const tol = 1e-14 * Math.max(1, Math.abs(a), Math.abs(b));
+    if (Math.abs(a - b) > tol) expect(a, path).toBe(b);
+    return;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    expect(a.length, path).toBe(b.length);
+    a.forEach((x, i) => expectClose(x, b[i], `${path}[${i}]`));
+    return;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    expect(Object.keys(a).sort(), path).toEqual(Object.keys(b).sort());
+    for (const k of Object.keys(a))
+      expectClose(
+        (a as Record<string, unknown>)[k],
+        (b as Record<string, unknown>)[k],
+        `${path}.${k}`,
+      );
+    return;
+  }
+  expect(a, path).toEqual(b);
+}
+
+describe("chapters 7-11: parity", () => {
+  it("steps the overlap timelines identically", () => {
+    for (const t of fx.timelineSteps) {
+      const [n, tl, tc, ts, b] = t.args as [
+        number,
+        number,
+        number,
+        number,
+        number,
+      ];
+      const out = tileTimeline(n, tl, tc, ts, b);
+      expect(out).toEqual(t.timeline);
+      expect(timelineSteps(out)).toEqual(t.steps);
+    }
+  });
+  it("marches the GEMM tiles identically", () => {
+    for (const v of GEMM_ORDER)
+      expect(gemmMarch(v), v).toEqual(
+        (fx.gemmMarch as Record<string, unknown>)[v],
+      );
+  });
+  it("reduces identically, every way", () => {
+    for (const k of REDUCE_KINDS)
+      expect(reduceSteps(k), k).toEqual(
+        (fx.reduce as Record<string, unknown>)[k],
+      );
+    expect(intValues(32, 2024)).toEqual(fx.laneData);
+  });
+  it("draws the same softmax scores (exactly)", () => {
+    for (const s of fx.softmax)
+      expect(softmaxInputs(16, s.seed)).toEqual(s.out.x);
+  });
+  it(`runs all ${fx.softmax.length} online softmaxes (within 1e-14 relative)`, () => {
+    for (const s of fx.softmax)
+      expectClose(onlineSoftmax(softmaxInputs(16, s.seed), s.block), s.out);
+  });
+  it("counts FlashAttention's traffic identically", () => {
+    for (const f of fx.flash) {
+      const [n, d, br, bc] = f.args as [number, number, number, number];
+      expect(flashSteps(n, d, br, bc)).toEqual(f.out);
+    }
+    for (const a of fx.attention) {
+      const [n, d, br, bc] = a.args as [number, number, number, number];
+      expect(attentionTraffic(n, d, br, bc)).toEqual(a.out);
+    }
+  });
+  it("dequantises identically", () => {
+    for (const d of fx.dequant)
+      expect(dequantSteps(d.seed, d.scale)).toEqual(d.out);
   });
 });

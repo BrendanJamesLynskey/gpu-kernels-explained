@@ -12,6 +12,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 
 import { AnimationPanel } from "@/components/anim/AnimationPanel";
 import { useStepper } from "@/components/anim/useStepper";
+import { useSvgFont } from "@/components/viz/useSvgFont";
 import { Segmented, Slider, Stat } from "@/components/ui/Controls";
 import { fmtAi, fmtFlops, pct, trim } from "@/lib/format";
 import { sweepCaption } from "@/lib/gpu/captions";
@@ -46,6 +47,8 @@ export default function RooflineWidget({
   const [log2ai, setLog2ai] = useState(0);
   const [hover, setHover] = useState<string | null>(null);
   const clipId = useId().replace(/:/g, "");
+  const font = useSvgFont(W);
+  const fs = font.fs;
 
   const p = useMemo(() => preset(pid), [pid]);
   const d = useMemo(() => derived(p), [p]);
@@ -82,7 +85,10 @@ export default function RooflineWidget({
 
   const free = rooflinePoint(p, 2 ** log2ai, engine);
   const ridgeFp32 = d.ridge_fp32;
-  const xTicks = [1 / 16, 1 / 4, 1, 4, 16, 64, 256, 1024];
+  // phones: every other tick, so that the labels stay legible
+  const xTicks = font.narrow
+    ? [1 / 16, 1, 16, 256]
+    : [1 / 16, 1 / 4, 1, 4, 16, 64, 256, 1024];
   const yTicks = [1e11, 1e12, 1e13, 1e14, 1e15].filter(
     (v) => v >= yMin && v <= yMax,
   );
@@ -90,6 +96,7 @@ export default function RooflineWidget({
   const visual = (
     <div className="mx-auto max-w-xl">
       <svg
+        ref={font.ref}
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
@@ -128,7 +135,8 @@ export default function RooflineWidget({
               x={sx(t)}
               y={H - M.b + 13}
               textAnchor="middle"
-              className="fill-neutral-600 font-mono text-[10px] dark:fill-neutral-400"
+              style={{ fontSize: fs(10) }}
+              className="fill-neutral-600 font-mono dark:fill-neutral-400"
             >
               {t < 1 ? `1/${1 / t}` : t}
             </text>
@@ -148,9 +156,12 @@ export default function RooflineWidget({
               x={M.l - 4}
               y={sy(t) + 3}
               textAnchor="end"
-              className="fill-neutral-600 font-mono text-[10px] dark:fill-neutral-400"
+              style={{ fontSize: fs(10) }}
+              className="fill-neutral-600 font-mono dark:fill-neutral-400"
             >
-              {fmtFlops(t).replace("FLOP/s", "")}
+              {font.narrow
+                ? `1e${Math.round(Math.log10(t))}`
+                : fmtFlops(t).replace("FLOP/s", "")}
             </text>
           </g>
         ))}
@@ -158,16 +169,20 @@ export default function RooflineWidget({
           x={(W + M.l) / 2}
           y={H - 4}
           textAnchor="middle"
-          className="fill-neutral-700 text-[11px] dark:fill-neutral-300"
+          style={{ fontSize: fs(11) }}
+          className="fill-neutral-700 dark:fill-neutral-300"
         >
-          arithmetic intensity (flop per HBM byte, log)
+          {font.narrow
+            ? "flop per HBM byte (log)"
+            : "arithmetic intensity (flop per HBM byte, log)"}
         </text>
         <text
           x={10}
           y={(H - M.b) / 2}
           transform={`rotate(-90 10 ${(H - M.b) / 2})`}
           textAnchor="middle"
-          className="fill-neutral-700 text-[11px] dark:fill-neutral-300"
+          style={{ fontSize: fs(11) }}
+          className="fill-neutral-700 dark:fill-neutral-300"
         >
           FLOP/s (log)
         </text>
@@ -196,13 +211,17 @@ export default function RooflineWidget({
           {sweep.slice(0, st.step + 1).map((s) => (
             <g key={s.tile}>
               <circle cx={sx(s.ai)} cy={sy(s.perf)} r={3} fill={MUTED.light} />
-              <text
-                x={sx(s.ai) + 4}
-                y={sy(s.perf) + 12}
-                className="fill-neutral-500 font-mono text-[8px] dark:fill-neutral-400"
-              >
-                {s.tile}
-              </text>
+              {/* phones: label every other tile size */}
+              {(!font.narrow || [1, 4, 16, 64].includes(s.tile)) && (
+                <text
+                  x={sx(s.ai) + 4}
+                  y={sy(s.perf) + 12}
+                  style={{ fontSize: fs(8) }}
+                  className="fill-neutral-500 font-mono dark:fill-neutral-400"
+                >
+                  {s.tile}
+                </text>
+              )}
             </g>
           ))}
           <circle
@@ -229,7 +248,8 @@ export default function RooflineWidget({
         <text
           x={sx(ridgeFp32) + 4}
           y={sy(p.peak_fp32) + 12}
-          className="fill-neutral-700 font-mono text-[9px] dark:fill-neutral-300"
+          style={{ fontSize: fs(9) }}
+          className="fill-neutral-700 font-mono dark:fill-neutral-300"
         >
           ridge {trim(ridgeFp32)}
         </text>

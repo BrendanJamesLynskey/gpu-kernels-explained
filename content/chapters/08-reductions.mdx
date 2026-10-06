@@ -1,0 +1,79 @@
+<ReductionWidget>
+  <Eq
+    label="A tree reduction adds pairs a stride apart, halving the stride each step, in log base 2 of n steps"
+    tex="\begin{gathered} x_t \leftarrow x_t + x_{t+\htmlClass{hl-stride}{s}}, \quad s = \tfrac{n}{2}, \dots, 1 \ \ (\log_2 n \text{ steps}) \\ \htmlClass{hl-shfl}{v_\ell \leftarrow v_\ell + v_{\ell + o}}, \quad o = 16, 8, \dots, 1 \end{gathered}"
+  />
+</ReductionWidget>
+
+<Layer kind="concept">
+
+Summing an array looks serial, but addition is associative, so a block can add its values as a **tree**: half the threads each add one pair, then a quarter, and so on, $\log_2 n$ steps for $n$ values, with a `__syncthreads()` between steps so every thread sees the previous step's sums. The animation sums 64 numbers with one block of 64 threads, which is two warps, four ways. They are the first three kernels of Mark Harris's classic "Optimizing Parallel Reduction in CUDA", then the warp-shuffle version that later CUDA made possible.
+
+1. **Divergent** (`if (tid % (2*s) == 0)`): the threads that work are spread out, every other one, then every fourth... Both warps keep running at every step with most lanes masked off ([chapter 3](/learn/03-warps-and-divergence)): the hatched cells.
+2. **Strided index** (`i = 2*s*tid`): the working threads are now packed at the front, so whole warps drop out together and divergence is gone. But thread $t$ now touches word $2st$, a stride of $2s$ words, and the reads collide in the banks: a 2-way conflict at every step ([chapter 5](/learn/05-bank-conflicts)).
+3. **Sequential addressing** (`if (tid < s) x[tid] += x[tid + s]`, with $s$ halving): threads read consecutive words (no conflicts) and the working threads are packed at the front (no divergence beyond the last warp). The first step adds the second warp's values onto the first's.
+4. **Warp shuffle**: inside a warp, `__shfl_down_sync` reads another lane's register directly. Five shuffles (by 16, 8, 4, 2, 1) sum a warp's 32 values with no shared memory and no `__syncthreads()`; then lane 0 of each warp writes one value, and thread 0 adds the warps' sums.
+
+Watch the counters: the three tree versions all make <V of="a100.reduce.sequential.smem" fmt="int" /> shared-memory accesses and 6 barriers; the shuffle version makes 4 and 1.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The model counts operations, not time: it gives each version's shared-memory accesses, barriers, shuffles, divergent warps and bank-conflict degree, exactly, for this block of 64. Harris's slides measure the time of each version on a 2007-era GPU; the ordering, not the ratios, is what carries over. Real reductions also add several values per thread before the tree, which this animation leaves out.
+
+</Callout>
+
+<Layer kind="maths">
+
+A tree over $n$ values takes $\log_2 n$ steps and $n - 1$ additions in total, the same work as a serial loop, but its depth is $\log_2 n$ instead of $n - 1$. At step $k$ (from 1) only $n / 2^k$ threads add, so the average share of threads busy is
+
+$$
+\frac{1}{\log_2 n} \sum_{k=1}^{\log_2 n} 2^{-k} = \frac{1 - 1/n}{\log_2 n},
+$$
+
+under 17% for $n = 64$: reductions are bandwidth- and latency-bound, never compute-bound, which is why fewer barriers and no shared-memory round trips (the shuffle version) matter.
+
+For the strided version, thread $t$'s first read at stride $s$ is word $2st$. Within a warp, lanes $t$ and $t'$ hit the same bank when $2s(t - t') \equiv 0 \pmod{32}$, so as long as the warp's 32 (or fewer) active lanes span more than 32 words, two of them share each bank: a 2-way conflict, as the model counts.
+
+</Layer>
+
+<Layer kind="code">
+
+The shuffle step, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts): lane $\ell$ adds the value of lane $\ell + o$, and a lane whose partner is off the end of the warp gets its own value back, as `__shfl_down_sync` does.
+
+```ts
+const src = lane + o < 32 ? lane + o : lane;
+next[32 * w + lane] =
+  (vals[32 * w + lane] as number) + (vals[32 * w + src] as number);
+```
+
+The same in CUDA, **illustrative and not compiled by this site's CI**:
+
+```cuda
+__device__ float warp_sum(float v) {
+  for (int o = 16; o > 0; o >>= 1)
+    v += __shfl_down_sync(0xffffffff, v, o);  // lane l reads lane l + o
+  return v;                                   // lane 0 holds the sum
+}
+```
+
+</Layer>
+
+## The four versions, counted (model)
+
+| Version                | Shared-memory accesses                           | `__syncthreads()`                                 | Worst bank conflict | Divergent warps (first step) |
+| ---------------------- | ------------------------------------------------ | ------------------------------------------------- | ------------------- | ---------------------------- |
+| Divergent (`tid % 2s`) | <V of="a100.reduce.divergent.smem" fmt="int" />  | <V of="a100.reduce.divergent.syncs" fmt="int" />  | 1-way (none)        | 2 of 2                       |
+| Strided index          | <V of="a100.reduce.strided.smem" fmt="int" />    | <V of="a100.reduce.strided.syncs" fmt="int" />    | 2-way               | 0 of 1                       |
+| Sequential addressing  | <V of="a100.reduce.sequential.smem" fmt="int" /> | <V of="a100.reduce.sequential.syncs" fmt="int" /> | 1-way (none)        | 0 of 1                       |
+| Warp shuffle           | <V of="a100.reduce.shuffle.smem" fmt="int" />    | <V of="a100.reduce.shuffle.syncs" fmt="int" />    | –                   | none                         |
+
+<Callout kind="deeper">
+
+- CUDA series: [Warp-level primitives](https://brendanjameslynskey.github.io/CUDA_06_Synchronisation/#slide-03) and [Parallel reduction, step by step](https://brendanjameslynskey.github.io/CUDA_06_Synchronisation/#slide-05).
+- NVIDIA GPU series: [The warp: 32 threads, one program counter](https://brendanjameslynskey.github.io/NVIDIA_GPU_22_Warp_Scheduling_SIMT/#slide-01).
+- Mark Harris, [Optimizing Parallel Reduction in CUDA](https://developer.download.nvidia.com/assets/cuda/files/reduction.pdf) (NVIDIA slides).
+- NVIDIA technical blog, [Using CUDA warp-level primitives](https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/).
+
+</Callout>

@@ -93,7 +93,9 @@ export function AnimationPanel({
         </p>
       </figcaption>
 
-      <div className="mt-4 min-w-0">{visual}</div>
+      <div className="mt-4 min-w-0" data-testid="visual">
+        {visual}
+      </div>
 
       <div
         role="group"
@@ -168,6 +170,10 @@ export function AnimationPanel({
           max={Math.max(0, s.n - 1)}
           value={s.step}
           onChange={(e) => s.setStep(Number(e.target.value))}
+          // touching the scrub bar pauses, even on the step already shown
+          // (a range input fires no change event when its value is unchanged)
+          onPointerDown={s.pause}
+          onKeyDown={s.pause}
           className="focus-ring h-11 w-full min-w-0 accent-indigo-600"
           aria-label={`Scrub: ${stepLabel}`}
           data-testid="scrub"

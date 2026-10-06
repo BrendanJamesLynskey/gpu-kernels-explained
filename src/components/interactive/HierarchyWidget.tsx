@@ -13,6 +13,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import { AnimationPanel } from "@/components/anim/AnimationPanel";
 import { useStepper } from "@/components/anim/useStepper";
 import { Segmented, Stat } from "@/components/ui/Controls";
+import { useSvgFont } from "@/components/viz/useSvgFont";
 import {
   fmtBytes,
   fmtFlops,
@@ -60,6 +61,8 @@ export default function HierarchyWidget({
   const [kid, setKid] = useState<KernelId>("vecadd");
   const [hover, setHover] = useState<string | null>(null);
   const hatchId = useId().replace(/:/g, "");
+  const font = useSvgFont(W);
+  const fs = font.fs;
 
   const p = useMemo(() => preset(pid), [pid]);
   const d = useMemo(() => derived(p), [p]);
@@ -90,6 +93,7 @@ export default function HierarchyWidget({
   const visual = (
     <div className="mx-auto max-w-xl">
       <svg
+        ref={font.ref}
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full"
         role="img"
@@ -136,7 +140,8 @@ export default function HierarchyWidget({
               <text
                 x={X0 + 14}
                 y={top + 18}
-                className="fill-neutral-900 text-[12px] font-semibold dark:fill-neutral-100"
+                style={{ fontSize: fs(12) }}
+                className="fill-neutral-900 font-semibold dark:fill-neutral-100"
               >
                 {name}
               </text>
@@ -144,7 +149,8 @@ export default function HierarchyWidget({
                 x={X0 + BOX_W - 8}
                 y={top + 18}
                 textAnchor="end"
-                className="fill-neutral-600 font-mono text-[10px] dark:fill-neutral-400"
+                style={{ fontSize: fs(10) }}
+                className="fill-neutral-600 font-mono dark:fill-neutral-400"
               >
                 {right}
               </text>
@@ -167,11 +173,17 @@ export default function HierarchyWidget({
               <text
                 x={X0 + 8}
                 y={top + 49}
-                className="fill-neutral-700 font-mono text-[10px] dark:fill-neutral-300"
+                style={{ fontSize: fs(10) }}
+                className="fill-neutral-700 font-mono dark:fill-neutral-300"
               >
+                {/* phones: the same facts, shorter (the bar shows "busy") */}
                 {isAlu
-                  ? `busy ${pct(util)} · ${lerp(s.flops, next.flops).toExponential(2)} of ${kt.flops.toExponential(2)} FLOPs done`
-                  : `busy ${pct(util)} · moved ${fmtBytes(lerp(s.moved[key], next.moved[key]))} of ${fmtBytes(kt.bytes[key])}`}
+                  ? font.narrow
+                    ? `${pct(util)} · ${lerp(s.flops, next.flops).toExponential(1)} / ${kt.flops.toExponential(1)} FLOP`
+                    : `busy ${pct(util)} · ${lerp(s.flops, next.flops).toExponential(2)} of ${kt.flops.toExponential(2)} FLOPs done`
+                  : font.narrow
+                    ? `${pct(util)} · ${fmtBytes(lerp(s.moved[key], next.moved[key]))} / ${fmtBytes(kt.bytes[key])}`
+                    : `busy ${pct(util)} · moved ${fmtBytes(lerp(s.moved[key], next.moved[key]))} of ${fmtBytes(kt.bytes[key])}`}
               </text>
             </g>
           );
@@ -213,7 +225,8 @@ export default function HierarchyWidget({
               <text
                 x={x + w + 8}
                 y={top + PIPE_H / 2 + 4}
-                className="fill-neutral-800 font-mono text-[10.5px] dark:fill-neutral-200"
+                style={{ fontSize: fs(10.5) }}
+                className="fill-neutral-800 font-mono dark:fill-neutral-200"
               >
                 {fmtRate(d.bw[lv])}
               </text>

@@ -27,6 +27,7 @@
     "lighthouse": "lhci autorun",
     "fixtures": "python3 scripts/make_fixtures.py",
     "screenshots": "tsx scripts/capture-screenshots.ts",
+    "animations": "tsx scripts/capture-animations.ts",
     "smoke": "tsx scripts/smoke-check.ts",
     "fixtures:check": "python3 scripts/make_fixtures.py --check"
   },

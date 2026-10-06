@@ -151,7 +151,9 @@ export function useStepper(
 
   return {
     n,
-    step: clock.step,
+    // clamped: when a parameter change shortens the model's state list, the
+    // render before the reset effect runs must not index past its end
+    step: clampStep(clock.step, n),
     frac: smooth ? fraction(clock, stepMs) : 0,
     playing,
     speed,

@@ -12,6 +12,14 @@ const ANIMATIONS = [
   ["/learn/04-coalescing", "coalescing-widget"],
   ["/learn/05-bank-conflicts", "bank-widget"],
   ["/learn/06-occupancy", "occupancy-widget"],
+  ["/learn/07-gemm", "gemm-widget"],
+  ["/learn/08-reductions", "reduction-widget"],
+  ["/learn/09-softmax-and-flashattention", "flash-widget"],
+  ["/learn/09-softmax-and-flashattention", "softmax-widget"],
+  ["/learn/10-split-k-and-overlap", "timeline-widget"],
+  ["/learn/10-split-k-and-overlap", "splitk-widget"],
+  ["/learn/11-quantised-kernels", "dequant-widget"],
+  ["/learn/11-quantised-kernels", "quant-widget"],
 ] as const;
 
 async function step(fig: Locator): Promise<number> {
@@ -133,4 +141,46 @@ test("animations play when scrolled into view and pause when scrolled away", asy
   await expect(fig).toHaveAttribute("data-playing", "true");
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   await expect(fig).toHaveAttribute("data-playing", "false");
+});
+
+test("touching the scrub bar pauses, even on the step already shown", async ({
+  page,
+}) => {
+  await page.goto("/learn/03-warps-and-divergence");
+  const fig = page.getByTestId("simt-widget");
+  await fig.scrollIntoViewIfNeeded();
+  await expect(fig).toHaveAttribute("data-playing", "true");
+  const before = await step(fig);
+  await fig.getByTestId("scrub").dispatchEvent("pointerdown");
+  await expect(fig).toHaveAttribute("data-playing", "false");
+  // pausing did not move the animation
+  expect(await step(fig)).toBeGreaterThanOrEqual(before);
+});
+
+test.describe("phone labels", () => {
+  test.use({ viewport: { width: 390, height: 900 } });
+  for (const [path, id] of ANIMATIONS) {
+    test(`${id}: every SVG label is at least 11 px on a 390 px screen`, async ({
+      page,
+    }) => {
+      await page.goto(path);
+      const fig = page.getByTestId(id);
+      await fig.scrollIntoViewIfNeeded();
+      // let the size observer settle
+      await page.waitForTimeout(300);
+      const sizes = await fig.evaluate((el) =>
+        [...el.querySelectorAll("svg text")]
+          .filter((t) => (t.textContent ?? "").trim().length > 0)
+          .map((t) => {
+            const css = parseFloat(getComputedStyle(t).fontSize);
+            const ctm = (t as SVGGraphicsElement).getScreenCTM();
+            // the scale of the transform (rotated labels included)
+            const k = ctm ? Math.hypot(ctm.a, ctm.b) : 1;
+            return { text: t.textContent, px: css * k };
+          }),
+      );
+      const small = sizes.filter((s) => s.px < 10.95);
+      expect(small).toEqual([]);
+    });
+  }
 });

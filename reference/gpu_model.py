@@ -31,6 +31,7 @@ Conventions:
 """
 from __future__ import annotations
 
+import math
 from typing import Any
 
 # ---------------------------------------------------------------------------
@@ -98,6 +99,7 @@ PRESETS: dict[str, dict[str, Any]] = {
             "fp32_cores_per_sm": _f(64, "spec", "a100-wp", "Table 4, p. 36"),
             "peak_fp32": _f(19.5e12, "spec", "a100-wp", "Table 4 (Peak FP32 TFLOPS, non-Tensor), p. 36"),
             "peak_tensor": _f(312e12, "spec", "a100-wp", "Table 4 (Peak BF16 Tensor TFLOPS with FP32 accumulate, dense), p. 36"),
+            "peak_int8_tensor": _f(624e12, "spec", "a100-wp", "Table 4 (Peak INT8 Tensor TOPS, dense), p. 36"),
             "hbm_bw": _f(1555e9, "spec", "a100-wp", "Table 4 (Memory Bandwidth), p. 37"),
             "hbm_bytes": _f(40e9, "spec", "a100-wp", "Table 4 (Memory Size 40 GB), p. 36"),
             "l2_bytes": _f(40960 * KB, "spec", "a100-wp", "Table 4 (L2 Cache Size 40960 KB), p. 37"),
@@ -135,6 +137,12 @@ PRESETS: dict[str, dict[str, Any]] = {
                 "derived",
                 "h100-page",
                 "BFLOAT16 Tensor Core 1,979 teraFLOPS is 'with sparsity'; dense is half",
+            ),
+            "peak_int8_tensor": _f(
+                1979e12,
+                "derived",
+                "h100-page",
+                "INT8 Tensor Core 3,958 TOPS is 'with sparsity'; dense is half",
             ),
             "hbm_bw": _f(3.35e12, "spec", "h100-page", "GPU Memory Bandwidth 3.35TB/s"),
             "hbm_bytes": _f(80e9, "spec", "h100-page", "GPU Memory 80GB"),
@@ -683,3 +691,511 @@ def tile_timeline(n: int, t_load: float, t_compute: float, t_store: float, buffe
     total = store_end[n - 1] if n else 0.0
     busy = n * t_compute
     return {"segments": segs, "total": total, "compute_busy": busy / total if total > 0 else 0.0}
+
+
+def timeline_steps(tl: dict[str, Any]) -> list[dict[str, Any]]:
+    """
+    The overlap animation: one state per event (a segment starting or
+    ending), in time order. Each state says which tile each engine is busy
+    with until the next event (None when idle), how many tiles are stored,
+    and the fraction of the time so far that the compute engine was busy.
+    """
+    segs = tl["segments"]
+    times: list[float] = []
+    for sg in segs:
+        for eng in ("load", "compute", "store"):
+            for t in sg[eng]:
+                if t not in times:
+                    times.append(t)
+    times.sort()
+    out = []
+    for t in times:
+        state: dict[str, Any] = {"t": t}
+        for eng in ("load", "compute", "store"):
+            state[eng] = None
+            for sg in segs:
+                a, b = sg[eng]
+                if a <= t < b and b > a:
+                    state[eng] = sg["tile"]
+        done = 0
+        busy = 0.0
+        for sg in segs:
+            if sg["store"][1] <= t:
+                done += 1
+            a, b = sg["compute"]
+            if b <= t:
+                busy += b - a
+            elif a < t:
+                busy += t - a
+        state["stored"] = done
+        state["compute_busy"] = busy / t if t > 0 else 0.0
+        out.append(state)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Small deterministic data for the animations (xorshift32, as lane_data)
+# ---------------------------------------------------------------------------
+
+
+def int_values(n: int, seed: int, mod: int = 100) -> list[int]:
+    """n pseudo-random integers in 0..mod-1 (xorshift32)."""
+    x = seed if seed != 0 else 1
+    out = []
+    for _ in range(n):
+        x = xorshift32(x)
+        out.append(x % mod)
+    return out
+
+
+def _bank_degree(words: list[int], banks: int = 32) -> int:
+    """Passes one warp's 32-bit shared-memory access needs (with broadcast)."""
+    distinct: list[list[int]] = [[] for _ in range(banks)]
+    for w in words:
+        b = w % banks
+        if w not in distinct[b]:
+            distinct[b].append(w)
+    return max(1, max(len(d) for d in distinct)) if words else 0
+
+
+# ---------------------------------------------------------------------------
+# Chapter 7: GEMM, step by step
+# ---------------------------------------------------------------------------
+
+# Four ways to compute C = A B (square, `size` on a side). eb is the bytes of
+# an A or B element; C is FP32 throughout. bm x bn is the block's tile of C;
+# tm x tn is what one thread (or, for the tensor cores, one warp) computes.
+GEMM_VARIANTS: dict[str, dict[str, Any]] = {
+    "naive": {
+        "label": "Naive: one output per thread, operands straight from global memory",
+        "engine": "fp32", "eb": 4, "bm": 1, "bn": 1, "tm": 1, "tn": 1, "smem": False,
+    },
+    "smem": {
+        "label": "Tiled: 32 × 32 blocks staged in shared memory",
+        "engine": "fp32", "eb": 4, "bm": 32, "bn": 32, "tm": 1, "tn": 1, "smem": True,
+    },
+    "regs": {
+        "label": "Register blocking: 128 × 128 blocks, 8 × 8 outputs per thread",
+        "engine": "fp32", "eb": 4, "bm": 128, "bn": 128, "tm": 8, "tn": 8, "smem": True,
+    },
+    "tensor": {
+        "label": "Tensor cores: BF16 in, FP32 accumulate; 128 × 128 blocks, 64 × 64 per warp",
+        "engine": "tensor", "eb": 2, "bm": 128, "bn": 128, "tm": 64, "tn": 64, "smem": True,
+    },
+}
+GEMM_ORDER = ("naive", "smem", "regs", "tensor")
+
+
+def gemm_variant(p: dict[str, Any], vid: str, size: int = 4096) -> dict[str, Any]:
+    """
+    Bytes at each level and the hierarchical-roofline time of one GEMM
+    variant (the same rules as gemm_traffic; registers are left out of the
+    time because the register file is sized to feed its ALUs).
+    """
+    v = GEMM_VARIANTS[vid]
+    m = n = k = size
+    eb = v["eb"]
+    flops = 2 * m * n * k
+    loads = eb * (m * k * (n // v["bn"]) + k * n * (m // v["bm"]))
+    store = 4 * m * n
+    l2 = loads + store
+    fits = eb * (m * k + k * n) <= p["l2_bytes"]
+    hbm = eb * (m * k + k * n) + store if fits else l2
+    smem = 0
+    if v["smem"]:
+        smem = loads + eb * k * (m * n // (v["tm"] * v["tn"])) * (v["tm"] + v["tn"])
+    d = derived(p)
+    peak = p["peak_fp32"] if v["engine"] == "fp32" else p["peak_tensor"]
+    times = {"smem": smem / d["bw"]["smem"], "l2": l2 / d["bw"]["l2"], "hbm": hbm / d["bw"]["hbm"]}
+    compute = flops / peak
+    total = compute
+    bound = "compute"
+    for lv in ("smem", "l2", "hbm"):
+        if times[lv] > total:
+            total = times[lv]
+            bound = lv
+    return {
+        "id": vid,
+        "flops": flops,
+        "bytes": {"smem": smem, "l2": l2, "hbm": hbm},
+        "ai": {
+            "smem": flops / smem if smem > 0 else None,
+            "l2": flops / l2,
+            "hbm": flops / hbm,
+        },
+        "peak": peak,
+        "times": times,
+        "compute": compute,
+        "total": total,
+        "bound": bound,
+        "achieved": flops / total,
+        "frac_peak": flops / total / peak,
+    }
+
+
+# The animation's small GEMM (16 x 16 x 16, k-tiles of 4): the same four
+# variants scaled down so that every tile can be drawn.
+MARCH_SIZE = 16
+MARCH_BK = 4
+GEMM_MARCH: dict[str, dict[str, Any]] = {
+    "naive": {"bm": 4, "bn": 4, "tm": 1, "tn": 1, "eb": 4, "smem": False},
+    "smem": {"bm": 4, "bn": 4, "tm": 1, "tn": 1, "eb": 4, "smem": True},
+    "regs": {"bm": 8, "bn": 8, "tm": 2, "tn": 2, "eb": 4, "smem": True},
+    "tensor": {"bm": 8, "bn": 8, "tm": 8, "tn": 8, "eb": 2, "smem": True},
+}
+
+
+def gemm_march(vid: str, size: int = MARCH_SIZE, bk: int = MARCH_BK) -> list[dict[str, Any]]:
+    """
+    Blocks of C in row-major order; for each, the k-loop in tiles of bk.
+    State 0 is the start; each later state is one k-tile of one block done,
+    with the running totals of global bytes (loads and the C stores), shared
+    memory bytes (stores of the staged tiles and the reads from them) and
+    flops.
+    """
+    v = GEMM_MARCH[vid]
+    bm, bn, tm, tn, eb = v["bm"], v["bn"], v["tm"], v["tn"], v["eb"]
+    kts = size // bk
+    out = [{"block": None, "kt": None, "global": 0, "smem": 0, "flops": 0, "ai": None}]
+    glob = 0
+    smem = 0
+    flops = 0
+    for bi in range(size // bm):
+        for bj in range(size // bn):
+            for kt in range(kts):
+                if v["smem"]:
+                    tile = eb * (bm * bk + bk * bn)
+                    glob += tile
+                    smem += tile + eb * bk * (bm * bn // (tm * tn)) * (tm + tn)
+                else:
+                    # every thread reads its own row of A and column of B
+                    glob += eb * bm * bn * 2 * bk
+                flops += 2 * bm * bn * bk
+                if kt == kts - 1:
+                    glob += 4 * bm * bn
+                out.append(
+                    {"block": [bi, bj], "kt": kt, "global": glob, "smem": smem, "flops": flops, "ai": flops / glob}
+                )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Chapter 8: reductions and warp shuffles
+# ---------------------------------------------------------------------------
+
+REDUCE_KINDS = ("divergent", "strided", "sequential", "shuffle")
+
+
+def reduce_steps(kind: str, n: int = 64, seed: int = 7) -> dict[str, Any]:
+    """
+    Sum n integers with one block of n threads (n/32 warps), the ways of
+    Harris's "Optimizing Parallel Reduction in CUDA":
+      divergent   if (tid % (2s) == 0) x[tid] += x[tid + s], s = 1, 2, 4, ...
+      strided     i = 2 s tid; if (i < n) x[i] += x[i + s]  (no divergence,
+                  but bank conflicts)
+      sequential  if (tid < s) x[tid] += x[tid + s], s = n/2, ..., 1
+      shuffle     each warp: v += __shfl_down_sync(~0, v, o), o = 16 ... 1;
+                  lane 0 of each warp writes its sum to shared memory, and
+                  thread 0 adds the n/32 partial sums.
+    State 0 holds the data; each later state is one step (a __syncthreads
+    apart for the shared-memory versions).
+    """
+    vals = int_values(n, seed)
+    warps = n // 32
+    expected = 0
+    for v in vals:
+        expected += v
+    steps: list[dict[str, Any]] = [
+        {"stride": 0, "values": list(vals), "active": [], "smem": 0, "syncs": 0, "shuffles": 0,
+         "degree": 0, "warps_active": 0, "warps_divergent": 0}
+    ]
+    smem = 0
+    syncs = 0
+    shuffles = 0
+    if kind in ("divergent", "strided", "sequential"):
+        s = n // 2 if kind == "sequential" else 1
+        while (kind == "sequential" and s > 0) or (kind != "sequential" and s < n):
+            pairs = []
+            for tid in range(n):
+                if kind == "divergent":
+                    if tid % (2 * s) == 0:
+                        pairs.append((tid, tid, tid + s))
+                elif kind == "strided":
+                    i = 2 * s * tid
+                    if i < n:
+                        pairs.append((tid, i, i + s))
+                else:
+                    if tid < s:
+                        pairs.append((tid, tid, tid + s))
+            new = list(vals)
+            for _, dst, src in pairs:
+                new[dst] = vals[dst] + vals[src]
+            vals = new
+            smem += 3 * len(pairs)
+            syncs += 1
+            degree = 0
+            wa = 0
+            wd = 0
+            for w in range(warps):
+                lanes = [pr for pr in pairs if pr[0] // 32 == w]
+                if lanes:
+                    wa += 1
+                    if len(lanes) < 32:
+                        wd += 1
+                    dg = _bank_degree([pr[1] for pr in lanes])
+                    if dg > degree:
+                        degree = dg
+            steps.append({"stride": s, "values": list(vals), "active": [pr[0] for pr in pairs], "smem": smem,
+                          "syncs": syncs, "shuffles": shuffles, "degree": degree, "warps_active": wa,
+                          "warps_divergent": wd})
+            s = s // 2 if kind == "sequential" else s * 2
+    elif kind == "shuffle":
+        o = 16
+        while o > 0:
+            new = list(vals)
+            for w in range(warps):
+                for lane in range(32):
+                    src = lane + o if lane + o < 32 else lane
+                    new[32 * w + lane] = vals[32 * w + lane] + vals[32 * w + src]
+            vals = new
+            shuffles += warps
+            steps.append({"stride": o, "values": list(vals), "active": [32 * w + l for w in range(warps) for l in range(o)],
+                          "smem": smem, "syncs": syncs, "shuffles": shuffles, "degree": 0, "warps_active": warps,
+                          "warps_divergent": 0})
+            o //= 2
+        # lane 0 of every warp writes its sum; thread 0 adds them up
+        total = 0
+        for w in range(warps):
+            total += vals[32 * w]
+        new = list(vals)
+        new[0] = total
+        vals = new
+        smem += 2 * warps
+        syncs += 1
+        steps.append({"stride": 0, "values": list(vals), "active": [0], "smem": smem, "syncs": syncs,
+                      "shuffles": shuffles, "degree": 1, "warps_active": 1, "warps_divergent": 1})
+    else:
+        raise ValueError(kind)
+    return {"kind": kind, "n": n, "expected": expected, "result": vals[0], "steps": steps}
+
+
+# ---------------------------------------------------------------------------
+# Chapter 9: online softmax and FlashAttention's memory traffic
+# ---------------------------------------------------------------------------
+
+
+def softmax_inputs(n: int = 16, seed: int = 127) -> list[float]:
+    """n scores in -5.0 .. 4.9."""
+    return [(v - 50) / 10 for v in int_values(n, seed)]
+
+
+def online_softmax(x: list[float], block: int) -> dict[str, Any]:
+    """
+    Milakov and Gimelshein's online softmax, a block at a time: keep the
+    running maximum m and the running sum l of exp(x - m); when a block
+    raises the maximum, rescale l by exp(m_old - m_new). Compared with the
+    ordinary three-pass softmax at the end.
+    """
+    m = -math.inf
+    l = 0.0
+    steps = []
+    for lo in range(0, len(x), block):
+        blk = x[lo:lo + block]
+        bmax = blk[0]
+        for v in blk:
+            if v > bmax:
+                bmax = v
+        m_new = m if m > bmax else bmax
+        scale = math.exp(m - m_new)
+        s = 0.0
+        for v in blk:
+            s += math.exp(v - m_new)
+        l_prev = l
+        l = l * scale + s
+        steps.append({"lo": lo, "hi": lo + len(blk), "block_max": bmax,
+                      "m_prev": None if m == -math.inf else m, "m": m_new,
+                      "scale": scale, "l_prev": l_prev, "block_sum": s, "l": l})
+        m = m_new
+    online = [math.exp(v - m) / l for v in x]
+    mx = x[0]
+    for v in x:
+        if v > mx:
+            mx = v
+    e = [math.exp(v - mx) for v in x]
+    tot = 0.0
+    for v in e:
+        tot += v
+    ordinary = [v / tot for v in e]
+    diff = 0.0
+    for a, b in zip(online, ordinary):
+        if abs(a - b) > diff:
+            diff = abs(a - b)
+    return {"x": x, "steps": steps, "m": m, "l": l, "sum_ordinary": tot, "online": online,
+            "ordinary": ordinary, "max_diff": diff}
+
+
+def attention_traffic(n: int, d: int, br: int, bc: int, eb: int = 2) -> dict[str, Any]:
+    """
+    HBM bytes of one attention head, sequence n, head dimension d, eb-byte
+    elements. Standard attention (FlashAttention paper, Algorithm 0) writes
+    S = QK^T and P = softmax(S) to HBM and reads them back; FlashAttention-2
+    keeps them on chip: each block of br queries reads Q_i once, every K_j
+    and V_j (blocks of bc), and writes O_i once. `flash` counts every K and
+    V re-read as HBM traffic (no L2 reuse, an upper bound); `compulsory` is
+    Q, K, V read once and O written once (every re-read an L2 hit, the lower
+    bound).
+    """
+    tr = n // br
+    tc = n // bc
+    standard = eb * (4 * n * d + 4 * n * n)
+    flash = eb * (n * d + 2 * n * d * tr + n * d)
+    # on chip: Q_i, K_j, V_j (eb bytes) and the S_ij tile and O_i accumulator (FP32)
+    onchip = eb * (br * d + 2 * bc * d) + 4 * (br * bc + br * d)
+    return {
+        "n": n, "d": d, "br": br, "bc": bc, "tr": tr, "tc": tc,
+        "flops": 4 * n * n * d,
+        "standard": standard,
+        "flash": flash,
+        "compulsory": eb * 4 * n * d,
+        "ratio": standard / flash,
+        "ratio_compulsory": standard / (eb * 4 * n * d),
+        "onchip": onchip,
+    }
+
+
+def flash_steps(n: int, d: int, br: int, bc: int, eb: int = 2) -> dict[str, Any]:
+    """
+    FlashAttention-2's loop, one state per (query block i, key block j):
+    the HBM bytes it has moved so far with no L2 reuse (`flash`) and with
+    every K, V re-read hitting L2 (`flash_l2`), next to standard attention's
+    bytes for the same share of the work.
+    """
+    a = attention_traffic(n, d, br, bc, eb)
+    tr, tc = a["tr"], a["tc"]
+    steps = [{"i": None, "j": None, "flash": 0, "flash_l2": 0, "standard": 0}]
+    moved = 0
+    once = 0
+    for i in range(tr):
+        for j in range(tc):
+            if j == 0:
+                moved += eb * br * d
+                once += eb * br * d
+            moved += 2 * eb * bc * d
+            if i == 0:
+                once += 2 * eb * bc * d
+            if j == tc - 1:
+                moved += eb * br * d
+                once += eb * br * d
+            done = i * tc + j + 1
+            steps.append({"i": i, "j": j, "flash": moved, "flash_l2": once,
+                          "standard": a["standard"] * done / (tr * tc)})
+    return {"traffic": a, "steps": steps}
+
+
+# ---------------------------------------------------------------------------
+# Chapter 10: split-K
+# ---------------------------------------------------------------------------
+
+
+def split_k(p: dict[str, Any], m: int, n: int, k: int, bm: int, bn: int, splits: int) -> dict[str, Any]:
+    """
+    A BF16 tensor-core GEMM whose m x n output has too few bm x bn tiles to
+    fill the GPU. Splitting k into `splits` slices makes tiles x splits
+    blocks, one per SM at a time (an illustrative simplification), each at
+    1/sms of the tensor peak; the FP32 partial sums are then written and
+    read back once to add them up.
+    """
+    tiles = (m // bm) * (n // bn)
+    blocks = tiles * splits
+    waves = (blocks + p["sms"] - 1) // p["sms"]
+    per_block = 2 * bm * bn * (k // splits)
+    t_compute = waves * per_block / (p["peak_tensor"] / p["sms"])
+    extra = 2 * 4 * m * n * splits if splits > 1 else 0
+    t_reduce = extra / p["hbm_bw"]
+    total = t_compute + t_reduce
+    return {
+        "splits": splits, "tiles": tiles, "blocks": blocks, "waves": waves,
+        "sm_util": blocks / (waves * p["sms"]),
+        "t_compute": t_compute, "extra_bytes": extra, "t_reduce": t_reduce, "total": total,
+        "achieved": 2 * m * n * k / total,
+    }
+
+
+SPLITK_SHAPE = {"m": 512, "n": 512, "k": 16384, "bm": 128, "bn": 128}
+SPLITK_SPLITS = (1, 2, 3, 4, 5, 6, 7, 8, 12, 16)
+
+
+def split_k_sweep(p: dict[str, Any]) -> list[dict[str, Any]]:
+    s = SPLITK_SHAPE
+    return [split_k(p, s["m"], s["n"], s["k"], s["bm"], s["bn"], sp) for sp in SPLITK_SPLITS]
+
+
+# ---------------------------------------------------------------------------
+# Chapter 11: quantised kernels
+# ---------------------------------------------------------------------------
+
+QUANT_FORMATS: dict[str, dict[str, Any]] = {
+    "bf16": {"label": "BF16 weights", "bits": 16, "group": 0, "act": 2, "engine": "tensor"},
+    "int8": {"label": "INT8 weights, BF16 maths (W8A16)", "bits": 8, "group": -1, "act": 2, "engine": "tensor"},
+    "int4": {"label": "INT4 weights in groups of 128, BF16 maths (W4A16)", "bits": 4, "group": 128, "act": 2, "engine": "tensor"},
+    "w8a8": {"label": "INT8 weights and activations (W8A8)", "bits": 8, "group": -1, "act": 1, "engine": "int8"},
+}
+QUANT_ORDER = ("bf16", "int8", "int4", "w8a8")
+QUANT_BATCHES = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
+QUANT_SHAPE = {"rows": 8192, "cols": 8192}
+
+
+def quant_gemm(p: dict[str, Any], fmt: str, rows: int, cols: int, batch: int) -> dict[str, Any]:
+    """
+    Y = X W^T for a rows x cols weight matrix and `batch` tokens. Weight
+    bytes: bits/8 per weight plus a 2-byte scale per row (group -1) or per
+    group of weights; activations in and outputs (BF16) out. Time is the
+    roofline: the larger of the HBM time and the compute time at the
+    format's tensor-core peak.
+    """
+    f = QUANT_FORMATS[fmt]
+    wbytes = rows * cols * f["bits"] // 8
+    if f["group"] == -1:
+        wbytes += 2 * rows
+    elif f["group"] > 0:
+        wbytes += 2 * (rows * cols // f["group"])
+    total_bytes = wbytes + batch * cols * f["act"] + batch * rows * 2
+    flops = 2 * rows * cols * batch
+    peak = p["peak_tensor"] if f["engine"] == "tensor" else p["peak_int8_tensor"]
+    t_mem = total_bytes / p["hbm_bw"]
+    t_comp = flops / peak
+    total = t_mem if t_mem > t_comp else t_comp
+    return {
+        "fmt": fmt, "batch": batch, "weight_bytes": wbytes, "bytes": total_bytes, "flops": flops,
+        "ai": flops / total_bytes, "peak": peak, "t_mem": t_mem, "t_comp": t_comp, "total": total,
+        "bound": "memory" if t_mem > t_comp else "compute", "achieved": flops / total,
+    }
+
+
+def quant_sweep(p: dict[str, Any], fmt: str) -> list[dict[str, Any]]:
+    s = QUANT_SHAPE
+    return [quant_gemm(p, fmt, s["rows"], s["cols"], b) for b in QUANT_BATCHES]
+
+
+def dequant_steps(seed: int = 11, scale: float = 0.0625) -> dict[str, Any]:
+    """
+    Dequantise in registers: one 32-bit register holds eight 4-bit weights.
+    For each, shift and mask (q), subtract the offset 8 and multiply by the
+    group's scale (w), then a fused multiply-add with the activation.
+    Scale and data are chosen so that every value is exact in floating point.
+    """
+    q = int_values(8, seed, 16)
+    x = [float(v - 4) for v in int_values(8, seed + 1, 9)]
+    word = 0
+    for i in range(8):
+        word |= q[i] << (4 * i)
+    steps: list[dict[str, Any]] = [{"stage": "load", "i": -1, "q": None, "w": None, "acc": 0.0}]
+    acc = 0.0
+    for i in range(8):
+        qi = (word >> (4 * i)) & 0xF
+        w = (qi - 8) * scale
+        steps.append({"stage": "unpack", "i": i, "q": qi, "w": None, "acc": acc})
+        steps.append({"stage": "scale", "i": i, "q": qi, "w": w, "acc": acc})
+        acc = acc + w * x[i]
+        steps.append({"stage": "fma", "i": i, "q": qi, "w": w, "acc": acc})
+    return {"word": word, "q": q, "x": x, "scale": scale, "steps": steps, "result": acc}

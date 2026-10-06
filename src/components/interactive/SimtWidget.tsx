@@ -11,6 +11,7 @@ import { useId, useMemo, useState, type ReactNode } from "react";
 import { AnimationPanel } from "@/components/anim/AnimationPanel";
 import { useStepper } from "@/components/anim/useStepper";
 import { Segmented, Slider, Stat } from "@/components/ui/Controls";
+import { useSvgFont } from "@/components/viz/useSvgFont";
 import { pct } from "@/lib/format";
 import { simtCaption } from "@/lib/gpu/captions";
 import { laneData, popcount, simtSteps, type Cond } from "@/lib/gpu/model";
@@ -48,6 +49,12 @@ export default function SimtWidget({
   const [lenC, setLenC] = useState(2);
   const [hover, setHover] = useState<string | null>(null);
   const hatchId = useId().replace(/:/g, "");
+  const font = useSvgFont(W);
+  const fs = font.fs;
+  // phones: per-lane data does not fit as labels; it is listed below instead
+  const laneLabels = !font.narrow || cond !== "data";
+  // phones: the row labels are taller than a row; space the rows out
+  const gap = font.narrow ? 5 : 3;
 
   const r = useMemo(
     () => simtSteps(cond, k, lenA, lenB, lenC),
@@ -82,7 +89,7 @@ export default function SimtWidget({
   const curKey = `${cur.phase}-${cur.j}`;
 
   const rows = r.steps.slice(0, st.step + 1);
-  const H = 22 + r.steps.length * (CELL + 3) + 4;
+  const H = 22 + r.steps.length * (CELL + gap) + 4;
 
   const visual = (
     <div className="grid min-w-0 gap-3 md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
@@ -107,6 +114,7 @@ export default function SimtWidget({
       </pre>
       <div className="min-w-0">
         <svg
+          ref={font.ref}
           viewBox={`0 0 ${W} ${H}`}
           className="h-auto w-full"
           role="img"
@@ -121,34 +129,41 @@ export default function SimtWidget({
               x={LEFT + lane * CELL + CELL / 2}
               y={10}
               textAnchor="middle"
-              className="fill-neutral-500 font-mono text-[6.5px] dark:fill-neutral-400"
+              style={{ fontSize: fs(6.5) }}
+              className="fill-neutral-500 font-mono dark:fill-neutral-400"
             >
-              {cond === "data" ? data[lane] : lane % 4 === 0 ? lane : ""}
+              {cond === "data" && laneLabels
+                ? data[lane]
+                : lane % (font.narrow ? 8 : 4) === 0
+                  ? lane
+                  : ""}
             </text>
           ))}
           <text
             x={2}
             y={10}
-            className="fill-neutral-600 font-mono text-[7px] dark:fill-neutral-400"
+            style={{ fontSize: fs(7) }}
+            className="fill-neutral-600 font-mono dark:fill-neutral-400"
           >
-            {cond === "data" ? "x[i]" : "lane"}
+            {cond === "data" && laneLabels ? "x[i]" : "lane"}
           </text>
           {rows.map((s, i) => {
-            const y = 18 + i * (CELL + 3);
+            const y = 18 + i * (CELL + gap);
             const isCur = i === st.step;
             return (
               <g key={i} data-row={i}>
                 <text
                   x={2}
                   y={y + 8}
-                  className="fill-neutral-700 font-mono text-[7.5px] dark:fill-neutral-300"
+                  style={{ fontSize: fs(7.5) }}
+                  className="fill-neutral-700 font-mono dark:fill-neutral-300"
                 >
                   {s.phase === "pre"
                     ? "i=…"
                     : s.phase === "branch"
                       ? "if"
-                      : `${s.phase}${s.j}`}{" "}
-                  {popcount(s.mask)}/32
+                      : `${s.phase}${s.j}`}
+                  {font.narrow ? "" : ` ${popcount(s.mask)}/32`}
                 </text>
                 {Array.from({ length: 32 }, (_, lane) => {
                   const on = ((s.mask >>> lane) & 1) === 1;
@@ -185,6 +200,11 @@ export default function SimtWidget({
             );
           })}
         </svg>
+        {!laneLabels && (
+          <p className="mt-1 break-words font-mono text-[0.7rem] text-neutral-600 dark:text-neutral-400">
+            x[0..31] = {data.join(", ")}
+          </p>
+        )}
         <p className="mt-1 text-[0.7rem] text-neutral-600 dark:text-neutral-400">
           Solid: the lane executes this instruction (blue = now, grey = done).
           Hatched: masked off, idle.

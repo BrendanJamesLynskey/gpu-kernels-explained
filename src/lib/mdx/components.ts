@@ -10,10 +10,18 @@ import { Layer } from "@/components/interactive/Layer";
 import {
   BankWidget,
   CoalescingWidget,
+  DequantWidget,
+  FlashWidget,
+  GemmWidget,
   HierarchyWidget,
   OccupancyWidget,
+  QuantWidget,
+  ReductionWidget,
   RooflineWidget,
   SimtWidget,
+  SoftmaxWidget,
+  SplitKWidget,
+  TimelineWidget,
 } from "@/components/interactive/lazy";
 import { Eq } from "@/components/mdx/Eq";
 import { V } from "@/components/mdx/V";
@@ -33,4 +41,12 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CoalescingWidget,
   BankWidget,
   OccupancyWidget,
+  GemmWidget,
+  ReductionWidget,
+  FlashWidget,
+  SoftmaxWidget,
+  TimelineWidget,
+  SplitKWidget,
+  DequantWidget,
+  QuantWidget,
 };

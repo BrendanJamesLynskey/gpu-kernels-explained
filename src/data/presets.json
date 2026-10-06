@@ -49,6 +49,88 @@
    "v": 32
   }
  },
+ "gemmMarch": {
+  "naive": {
+   "bm": 4,
+   "bn": 4,
+   "eb": 4,
+   "smem": false,
+   "tm": 1,
+   "tn": 1
+  },
+  "regs": {
+   "bm": 8,
+   "bn": 8,
+   "eb": 4,
+   "smem": true,
+   "tm": 2,
+   "tn": 2
+  },
+  "smem": {
+   "bm": 4,
+   "bn": 4,
+   "eb": 4,
+   "smem": true,
+   "tm": 1,
+   "tn": 1
+  },
+  "tensor": {
+   "bm": 8,
+   "bn": 8,
+   "eb": 2,
+   "smem": true,
+   "tm": 8,
+   "tn": 8
+  }
+ },
+ "gemmOrder": [
+  "naive",
+  "smem",
+  "regs",
+  "tensor"
+ ],
+ "gemmVariants": {
+  "naive": {
+   "bm": 1,
+   "bn": 1,
+   "eb": 4,
+   "engine": "fp32",
+   "label": "Naive: one output per thread, operands straight from global memory",
+   "smem": false,
+   "tm": 1,
+   "tn": 1
+  },
+  "regs": {
+   "bm": 128,
+   "bn": 128,
+   "eb": 4,
+   "engine": "fp32",
+   "label": "Register blocking: 128 × 128 blocks, 8 × 8 outputs per thread",
+   "smem": true,
+   "tm": 8,
+   "tn": 8
+  },
+  "smem": {
+   "bm": 32,
+   "bn": 32,
+   "eb": 4,
+   "engine": "fp32",
+   "label": "Tiled: 32 × 32 blocks staged in shared memory",
+   "smem": true,
+   "tm": 1,
+   "tn": 1
+  },
+  "tensor": {
+   "bm": 128,
+   "bn": 128,
+   "eb": 2,
+   "engine": "tensor",
+   "label": "Tensor cores: BF16 in, FP32 accumulate; 128 × 128 blocks, 64 × 64 per warp",
+   "smem": true,
+   "tm": 64,
+   "tn": 64
+  }
+ },
  "kernels": {
   "gemm128": {
    "bm": 128,
@@ -171,6 +253,12 @@
      "src": "a100-wp",
      "st": "spec",
      "v": 19500000000000.0
+    },
+    "peak_int8_tensor": {
+     "ref": "Table 4 (Peak INT8 Tensor TOPS, dense), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 624000000000000.0
     },
     "peak_tensor": {
      "ref": "Table 4 (Peak BF16 Tensor TFLOPS with FP32 accumulate, dense), p. 36",
@@ -305,6 +393,12 @@
      "st": "spec",
      "v": 67000000000000.0
     },
+    "peak_int8_tensor": {
+     "ref": "INT8 Tensor Core 3,958 TOPS is 'with sparsity'; dense is half",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 1979000000000000.0
+    },
     "peak_tensor": {
      "ref": "BFLOAT16 Tensor Core 1,979 teraFLOPS is 'with sparsity'; dense is half",
      "src": "h100-page",
@@ -346,6 +440,59 @@
    "name": "H100 SXM5 80 GB"
   }
  ],
+ "quantBatches": [
+  1,
+  2,
+  4,
+  8,
+  16,
+  32,
+  64,
+  128,
+  256,
+  512,
+  1024
+ ],
+ "quantFormats": {
+  "bf16": {
+   "act": 2,
+   "bits": 16,
+   "engine": "tensor",
+   "group": 0,
+   "label": "BF16 weights"
+  },
+  "int4": {
+   "act": 2,
+   "bits": 4,
+   "engine": "tensor",
+   "group": 128,
+   "label": "INT4 weights in groups of 128, BF16 maths (W4A16)"
+  },
+  "int8": {
+   "act": 2,
+   "bits": 8,
+   "engine": "tensor",
+   "group": -1,
+   "label": "INT8 weights, BF16 maths (W8A16)"
+  },
+  "w8a8": {
+   "act": 1,
+   "bits": 8,
+   "engine": "int8",
+   "group": -1,
+   "label": "INT8 weights and activations (W8A8)"
+  }
+ },
+ "quantOrder": [
+  "bf16",
+  "int8",
+  "int4",
+  "w8a8"
+ ],
+ "quantShape": {
+  "cols": 8192,
+  "rows": 8192
+ },
  "sources": {
   "a100-wp": {
    "title": "NVIDIA A100 Tensor Core GPU Architecture (whitepaper)",
@@ -379,6 +526,27 @@
    "title": "PTX ISA: matrix shapes for mma and wgmma",
    "url": "https://docs.nvidia.com/cuda/parallel-thread-execution/index.html"
   }
+ },
+ "splitK": {
+  "shape": {
+   "bm": 128,
+   "bn": 128,
+   "k": 16384,
+   "m": 512,
+   "n": 512
+  },
+  "splits": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8,
+   12,
+   16
+  ]
  },
  "sweepTiles": [
   1,

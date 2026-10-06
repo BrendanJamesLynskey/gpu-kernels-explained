@@ -17,6 +17,13 @@ import {
   pct,
   trim,
 } from "@/lib/format";
+import {
+  QUANT_SHAPE,
+  preset,
+  quantSweep,
+  splitKSweep,
+  tileTimeline,
+} from "@/lib/gpu/model";
 import { formatValue, lookup, type Fmt } from "@/lib/gpu/values";
 
 const DIR = path.join(__dirname, "../../content/chapters");
@@ -88,5 +95,62 @@ describe("formatting", () => {
     expect(fmtTime(2.5e-9)).toBe("2.5 ns");
     expect(pct(0.3751, 1)).toBe("37.5%");
     expect(fmtAi(0.25)).toBe("0.25 flop/byte");
+  });
+});
+
+/**
+ * Numbers the chapters 7-11 state in words (not through <V />): each is
+ * recomputed here from the model, so the prose cannot drift from it.
+ */
+describe("numbers written into the prose of chapters 7-11", () => {
+  const A100 = preset("a100");
+  const H100 = preset("h100");
+  it("chapter 7: the tensor roof is 16 times the FP32 roof on the A100", () => {
+    expect(A100.peak_tensor / A100.peak_fp32).toBe(16);
+  });
+  it("chapter 8: under 17% of threads busy on average for n = 64", () => {
+    const n = 64;
+    const share = (1 - 1 / n) / Math.log2(n);
+    expect(share).toBeLessThan(0.17);
+    expect(share).toBeGreaterThan(0.16);
+  });
+  it("chapter 10: the overlap example and the split-K optimum", () => {
+    const t1 = tileTimeline(6, 2, 3, 1, 1).total;
+    const t2 = tileTimeline(6, 2, 3, 1, 2).total;
+    expect([t1, t2]).toEqual([31, 21]);
+    expect(trim(t1 / t2, 3)).toBe("1.48");
+    for (const [a, b, c] of [
+      [2, 3, 1],
+      [3, 1.5, 1],
+      [1, 1, 1],
+    ] as const)
+      expect(tileTimeline(6, a, b, c, 3).total).toBe(
+        tileTimeline(6, a, b, c, 2).total,
+      );
+    const best = (p: typeof A100) =>
+      splitKSweep(p).reduce((x, y) => (y.total < x.total ? y : x));
+    expect(best(A100).splits).toBe(6);
+    expect(best(A100).blocks).toBe(96);
+    expect(best(H100).splits).toBe(8);
+    expect(best(H100).waves).toBe(1);
+    expect(pct(1 - splitKSweep(A100)[0]!.sm_util)).toBe("85%");
+  });
+  it("chapter 11: INT4 with groups of 128 is 3.88 times smaller than BF16", () => {
+    const b = quantSweep(A100, "bf16")[0]!;
+    const q = quantSweep(A100, "int4")[0]!;
+    expect(trim(b.weight_bytes / q.weight_bytes, 3)).toBe("3.88");
+    expect(QUANT_SHAPE.rows * QUANT_SHAPE.cols).toBe(67108864);
+    expect(A100.peak_int8_tensor / A100.peak_tensor).toBe(2);
+    // the bends: BF16 between batch 128 and 256, INT4 between 32 and 64
+    const bend = (f: "bf16" | "int4") =>
+      quantSweep(A100, f).find((r) => r.bound === "compute")!.batch;
+    expect(bend("bf16")).toBe(256);
+    expect(bend("int4")).toBe(64);
+    // at batch 1024 the weight-only formats equal BF16; W8A8 is twice as fast
+    const at = (f: "bf16" | "int4" | "int8" | "w8a8") =>
+      quantSweep(A100, f).at(-1)!.total;
+    expect(at("int4")).toBe(at("bf16"));
+    expect(at("int8")).toBe(at("bf16"));
+    expect(at("bf16") / at("w8a8")).toBeCloseTo(2, 2);
   });
 });

@@ -49,6 +49,14 @@ TIMELINES = [
     (8, 4.5, 1.25, 0.5, 2),
     (8, 0.1, 0.7, 0.3, 2),
 ]
+# the overlap animation's scenarios (chapter 10): tiles, load, compute, store
+TIMELINE_SCENARIOS = [(6, 2.0, 3.0, 1.0), (6, 3.0, 1.5, 1.0), (6, 1.0, 1.0, 1.0)]
+SOFTMAX_SEEDS = (127, 142, 101)
+DEQUANT_SEEDS = (11, 21, 31)
+DEQUANT_SCALES = (0.0625, 0.125, 0.25)
+SOFTMAX_BLOCKS = (2, 4, 8, 16)
+FLASH = [(n, d, b) for n in (512, 1024) for d in (64, 128) for b in (64, 128)]
+ATTN = [(n, d, b) for n in (1024, 2048, 4096, 8192, 16384) for d in (64, 128) for b in (64, 128)]
 
 
 def site_data() -> dict:
@@ -58,6 +66,14 @@ def site_data() -> dict:
         "presets": [g.PRESETS[pid] for pid in PRESET_IDS],
         "kernels": g.KERNELS,
         "sweepTiles": list(g.SWEEP_TILES),
+        "gemmVariants": g.GEMM_VARIANTS,
+        "gemmOrder": list(g.GEMM_ORDER),
+        "gemmMarch": g.GEMM_MARCH,
+        "splitK": {"shape": g.SPLITK_SHAPE, "splits": list(g.SPLITK_SPLITS)},
+        "quantFormats": g.QUANT_FORMATS,
+        "quantOrder": list(g.QUANT_ORDER),
+        "quantBatches": list(g.QUANT_BATCHES),
+        "quantShape": g.QUANT_SHAPE,
     }
 
 
@@ -82,6 +98,9 @@ def fixtures() -> dict:
             ],
             "sweep": g.roofline_sweep(p),
             "occupancy": occ,
+            "gemmVariants": {v: g.gemm_variant(p, v) for v in g.GEMM_ORDER},
+            "splitK": g.split_k_sweep(p),
+            "quant": {f: g.quant_sweep(p, f) for f in g.QUANT_ORDER},
             "occupancySteps": [
                 {"threads": t, "regs": r, "smem": s, "out": g.occupancy_steps(p, t, r, s)}
                 for (t, r, s) in [(256, 32, 0), (256, 64, 49152), (1024, 64, 0), (128, 255, 0), (64, 32, 102400), (32, 16, 0)]
@@ -97,6 +116,23 @@ def fixtures() -> dict:
         out["banks"].append({"pattern": pat, "pad": pad, "stride": st, "out": g.bank_steps(pat, pad, st)})
     for n, tl, tc, ts, b in TIMELINES:
         out["timeline"].append({"args": [n, tl, tc, ts, b], "out": g.tile_timeline(n, tl, tc, ts, b)})
+    out["timelineSteps"] = []
+    for n, tl, tc, ts in TIMELINE_SCENARIOS:
+        for b in (1, 2, 3):
+            t = g.tile_timeline(n, tl, tc, ts, b)
+            out["timelineSteps"].append({"args": [n, tl, tc, ts, b], "timeline": t, "steps": g.timeline_steps(t)})
+    out["gemmMarch"] = {v: g.gemm_march(v) for v in g.GEMM_ORDER}
+    out["reduce"] = {k: g.reduce_steps(k) for k in g.REDUCE_KINDS}
+    out["softmax"] = [
+        {"seed": sd, "block": b, "out": g.online_softmax(g.softmax_inputs(16, sd), b)}
+        for sd in SOFTMAX_SEEDS
+        for b in SOFTMAX_BLOCKS
+    ]
+    out["flash"] = [{"args": [n, d, b, b], "out": g.flash_steps(n, d, b, b)} for n, d, b in FLASH]
+    out["attention"] = [{"args": [n, d, b, b], "out": g.attention_traffic(n, d, b, b)} for n, d, b in ATTN]
+    out["dequant"] = [
+        {"seed": sd, "scale": sc, "out": g.dequant_steps(sd, sc)} for sd in DEQUANT_SEEDS for sc in DEQUANT_SCALES
+    ]
     return out
 
 

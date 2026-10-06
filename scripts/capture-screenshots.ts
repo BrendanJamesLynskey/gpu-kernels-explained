@@ -57,6 +57,49 @@ const SHOTS: Shot[] = [
     step: 3,
   },
   { name: "08-gpus", path: "/gpus" },
+  { name: "09-gemm", path: "/learn/07-gemm", widget: "gemm-widget", step: 22 },
+  {
+    name: "10-reductions",
+    path: "/learn/08-reductions",
+    widget: "reduction-widget",
+    step: 2,
+  },
+  {
+    name: "11-flashattention",
+    path: "/learn/09-softmax-and-flashattention",
+    widget: "flash-widget",
+    step: 30,
+  },
+  {
+    name: "12-online-softmax",
+    path: "/learn/09-softmax-and-flashattention",
+    widget: "softmax-widget",
+    step: 2,
+  },
+  {
+    name: "13-overlap",
+    path: "/learn/10-split-k-and-overlap",
+    widget: "timeline-widget",
+    step: 7,
+  },
+  {
+    name: "14-split-k",
+    path: "/learn/10-split-k-and-overlap",
+    widget: "splitk-widget",
+    step: 5,
+  },
+  {
+    name: "15-dequantise",
+    path: "/learn/11-quantised-kernels",
+    widget: "dequant-widget",
+    step: 12,
+  },
+  {
+    name: "16-quantised-layer",
+    path: "/learn/11-quantised-kernels",
+    widget: "quant-widget",
+    step: 6,
+  },
 ];
 
 async function main(): Promise<void> {

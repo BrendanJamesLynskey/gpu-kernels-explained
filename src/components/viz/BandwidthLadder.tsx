@@ -12,7 +12,8 @@ export function BandwidthLadder({ pid }: { pid: PresetId }): JSX.Element {
   const d = derived(p);
   const W = 360;
   const LABEL = 104;
-  const BAR = W - LABEL - 64;
+  // labels in viewBox units that stay >= 11 px down to a 310 px wide figure
+  const BAR = W - LABEL - 80;
   const max = d.bw.reg;
   return (
     <svg
@@ -29,7 +30,7 @@ export function BandwidthLadder({ pid }: { pid: PresetId }): JSX.Element {
             <text
               x={0}
               y={y + 15}
-              className="fill-neutral-800 text-[11px] dark:fill-neutral-200"
+              className="fill-neutral-800 text-[13.2px] dark:fill-neutral-200"
             >
               {LEVEL_NAME[lv]}
             </text>
@@ -44,7 +45,7 @@ export function BandwidthLadder({ pid }: { pid: PresetId }): JSX.Element {
             <text
               x={LABEL + w + 6}
               y={y + 15}
-              className="fill-neutral-700 font-mono text-[10px] dark:fill-neutral-300"
+              className="fill-neutral-700 font-mono text-[13px] dark:fill-neutral-300"
             >
               {fmtRate(d.bw[lv])}
             </text>

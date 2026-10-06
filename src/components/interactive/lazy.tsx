@@ -47,3 +47,35 @@ export const OccupancyWidget = dynamic(() => import("./OccupancyWidget"), {
   ssr: false,
   loading: loading("animation"),
 });
+export const GemmWidget = dynamic(() => import("./GemmWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const ReductionWidget = dynamic(() => import("./ReductionWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const FlashWidget = dynamic(() => import("./FlashWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const SoftmaxWidget = dynamic(() => import("./SoftmaxWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const TimelineWidget = dynamic(() => import("./TimelineWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const SplitKWidget = dynamic(() => import("./SplitKWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const DequantWidget = dynamic(() => import("./DequantWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});
+export const QuantWidget = dynamic(() => import("./QuantWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});

@@ -1,0 +1,103 @@
+<TimelineWidget>
+  <Eq
+    label="With one buffer each tile's load and compute run back to back; with two or more, the steady state runs at the slowest engine's pace"
+    tex="\begin{gathered} \htmlClass{hl-serial}{T_{1} = n\,(t_{\text{load}} + t_{\text{comp}}) + t_{\text{store}}} \\ \htmlClass{hl-steady}{T_{\ge 2} \approx t_{\text{load}} + n \max(t_{\text{load}}, t_{\text{comp}}, t_{\text{store}}) + t_{\text{store}}} \end{gathered}"
+  />
+</TimelineWidget>
+
+<Layer kind="concept">
+
+A GPU has separate engines for moving data and for computing on it, and a fast kernel keeps them all busy at once. The same pattern appears at two scales:
+
+- **Inside a kernel**, a block loads the next tile into shared memory while it computes on the current one (double buffering, or a deeper pipeline). On the A100 the loads are `cp.async` copies that bypass the registers; on the H100 the Tensor Memory Accelerator (TMA) moves whole tiles.
+- **Across kernels**, CUDA streams let a host-to-device copy, a kernel and a device-to-host copy of different chunks run at the same time, because the copy engines and the SMs are separate hardware.
+
+The animation is the model's schedule for six tiles on three engines: copy in, compute, copy out. With **one buffer**, a tile cannot load until the previous tile's compute has freed the buffer, so loading and computing alternate and the compute engine waits (the hatching). With **two**, tile $i+1$ loads while tile $i$ computes: after the first load, the kernel runs at the pace of its slowest engine. A third buffer only helps when the engines' times vary; with the fixed times here it changes nothing. Try the copy-heavy workload: overlap still helps, but now the copy engine sets the pace and the compute engine waits instead.
+
+</Layer>
+
+<SplitKWidget>
+  <Eq
+    label="Split-K time: the number of waves times one block's time, plus writing and reading back the partial sums"
+    tex="T = \htmlClass{hl-waves}{\Bigl\lceil \tfrac{\text{tiles} \times s}{\text{SMs}} \Bigr\rceil \cdot \frac{2\,b_m b_n\,(k/s)}{P/\text{SMs}}} + \htmlClass{hl-reduce}{\frac{2 \cdot 4\,mn\,s}{W_{\text{HBM}}}}"
+  />
+</SplitKWidget>
+
+<Layer kind="concept">
+
+Overlap needs enough independent work. A GEMM with a small output and a long $k$ (a 512 × 512 result from 16,384-long dot products, as in some projection layers at small batch) has only 16 output tiles of 128 × 128: 16 blocks for <V of="a100.sms" fmt="int" /> SMs on an A100, so 85% of the GPU sits idle. **Split-K** cuts the $k$ dimension into $s$ slices: each block computes a partial sum of one tile over one slice, and a second pass adds the $s$ partial sums. More blocks fill more SMs, at the price of writing and re-reading the partial sums.
+
+Step through the split counts: the time falls almost as $1/s$ while the blocks still fit in one wave, then jumps when they spill into a second wave of mostly idle SMs. On the A100 the best split is 6 (96 blocks, one wave): <V of="a100.splitk.6.total" fmt="time" /> instead of <V of="a100.splitk.1.total" fmt="time" />. On the H100, with 132 SMs, 8 splits (128 blocks) still fit one wave. Libraries choose the split by such a model; **Stream-K** (Osama et al., 2023) goes further and gives every SM an equal share of the total multiply-add work, so there is no partial wave at all.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The timeline uses unit-free times per tile, not measurements. Split-K's model is simpler than a real GPU: one block per SM at a time, each at 1/SMs of the BF16 tensor peak, operand traffic ignored, and the partial sums written and read once in FP32 at full HBM bandwidth. It shows the wave-quantisation effect and the reduction cost, not a library's choice.
+
+</Callout>
+
+<Layer kind="maths">
+
+**Overlap.** Each engine handles one tile at a time, and tile $i$'s load needs a free buffer, that is, tile $i - b$'s compute finished ($b$ buffers). With $b = 1$, loads and computes alternate, so
+
+$$
+T_1 = n\,(t_{\text{load}} + t_{\text{comp}}) + t_{\text{store}} .
+$$
+
+With $b \ge 2$ and fixed times, the slowest engine runs without a break after the pipeline fills, so $T \approx t_{\text{load}} + n \max(t_{\text{load}}, t_{\text{comp}}, t_{\text{store}}) + t_{\text{store}}$ (exactly so when compute is the slowest; the model computes the schedule event by event). For the compute-heavy case, $t = (2, 3, 1)$ and $n = 6$: $T_1 = 31$ and $T_2 = 2 + 18 + 1 = 21$, a speed-up of 1.48.
+
+**Split-K.** With $s$ slices there are $\text{tiles} \times s$ blocks and $\lceil \text{tiles} \cdot s / \text{SMs} \rceil$ waves; each block does $2\,b_m b_n (k/s)$ flops. The compute time falls as $1/s$ only while the wave count stays the same; the reduction adds $2 \cdot 4\,mn\,s$ bytes. The best $s$ is the largest that fills one wave, unless the reduction outgrows the saving.
+
+</Layer>
+
+<Layer kind="code">
+
+The schedule rule, cut from [`src/lib/gpu/model.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/model.ts): tile $i$'s load waits for the previous load and for a free buffer.
+
+```ts
+let ls = i > 0 ? (loadEnd[i - 1] as number) : 0.0;
+if (i >= buffers && (compEnd[i - buffers] as number) > ls)
+  ls = compEnd[i - buffers] as number;
+```
+
+Double buffering in CUDA, **illustrative and not compiled by this site's CI** (Ampere's asynchronous copies through the pipeline API):
+
+```cuda
+// a two-stage cuda::pipeline: start tile 0, then each iteration starts
+// tile t + 1 before waiting for tile t
+pipe.producer_acquire();
+cuda::memcpy_async(buf[0], src(0), bytes, pipe);
+pipe.producer_commit();
+for (int t = 0; t < ntiles; ++t) {
+  if (t + 1 < ntiles) {
+    pipe.producer_acquire();                     // load tile t + 1 ...
+    cuda::memcpy_async(buf[(t + 1) % 2], src(t + 1), bytes, pipe);
+    pipe.producer_commit();
+  }
+  pipe.consumer_wait();                          // tile t has arrived
+  compute(buf[t % 2]);                           // ... while computing tile t
+  pipe.consumer_release();
+}
+```
+
+</Layer>
+
+## Split-K on the A100 (model, 512 × 512 × 16384, BF16)
+
+| Splits | Blocks | Waves | Time                                       |
+| ------ | ------ | ----- | ------------------------------------------ |
+| 1      | 16     | 1     | <V of="a100.splitk.1.total" fmt="time" />  |
+| 4      | 64     | 1     | <V of="a100.splitk.4.total" fmt="time" />  |
+| 6      | 96     | 1     | <V of="a100.splitk.6.total" fmt="time" />  |
+| 7      | 112    | 2     | <V of="a100.splitk.7.total" fmt="time" />  |
+| 12     | 192    | 2     | <V of="a100.splitk.12.total" fmt="time" /> |
+
+<Callout kind="deeper">
+
+- CUDA series: [Overlapping compute and transfer](https://brendanjameslynskey.github.io/CUDA_08_Streams/#slide-03), [Practical pattern: pipelined processing](https://brendanjameslynskey.github.io/CUDA_08_Streams/#slide-05) and [Nsight Systems: the timeline view](https://brendanjameslynskey.github.io/CUDA_07_Profiling/#slide-02).
+- NVIDIA GPU series: [TMA: the Tensor Memory Accelerator](https://brendanjameslynskey.github.io/NVIDIA_GPU_07_Hopper/#slide-06).
+- Osama, Merrill, Cecka, Garland and Owens, [Stream-K: Work-centric Parallel Decomposition for Dense Matrix-Matrix Multiplication on the GPU](https://arxiv.org/abs/2301.03598) (2023).
+- NVIDIA technical blog, [How to overlap data transfers in CUDA C/C++](https://developer.nvidia.com/blog/how-overlap-data-transfers-cuda-cc/).
+
+</Callout>
