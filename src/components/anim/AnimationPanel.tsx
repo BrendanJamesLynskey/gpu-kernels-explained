@@ -76,6 +76,7 @@ export function AnimationPanel({
       data-testid={testId}
       data-step={s.step}
       data-playing={s.playing ? "true" : "false"}
+      data-key={s.appliedKey}
       tabIndex={0}
       onKeyDown={onKey}
       aria-label={`${title}: animation. Space plays or pauses, the arrow keys step.`}

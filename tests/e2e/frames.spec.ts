@@ -51,6 +51,17 @@ const PY = fx.presets.a100;
 test.use({ contextOptions: { reducedMotion: "reduce" } });
 const A100 = preset("a100");
 
+/**
+ * Change a parameter and wait until the animation has restarted for it
+ * (its data-key changes in the reset itself), so a following scrub cannot
+ * be undone by the reset.
+ */
+async function change(fig: Locator, act: () => Promise<void>): Promise<void> {
+  const before = (await fig.getAttribute("data-key")) ?? "";
+  await act();
+  await expect(fig).not.toHaveAttribute("data-key", before);
+}
+
 async function show(fig: Locator, s: number): Promise<void> {
   // pause first: the animation starts by itself when it scrolls into view
   if ((await fig.getAttribute("data-playing")) === "true")
@@ -72,7 +83,9 @@ test("memory hierarchy: vector add on the A100", async ({ page }) => {
     );
   }
   // switch kernel: the model re-runs and the animation restarts
-  await fig.getByRole("radio", { name: "GEMM 128×128" }).click();
+  await change(fig, () =>
+    fig.getByRole("radio", { name: "GEMM 128×128" }).click(),
+  );
   await show(fig, 60);
   await expect(fig.getByTestId("caption")).toHaveText(
     flowCaption(
@@ -124,7 +137,9 @@ test("coalescing: stride 1, then stride 8", async ({ page }) => {
       coalesceCaption(r1, s, 4),
     );
   }
-  await fig.getByRole("slider", { name: /Stride/ }).fill("8");
+  await change(fig, () =>
+    fig.getByRole("slider", { name: /Stride/ }).fill("8"),
+  );
   const r8 = fx.coalesce.find(
     (c) => c.eb === 4 && c.stride === 8 && c.offset === 0,
   )!.out as unknown as CoalesceResult;
@@ -150,7 +165,9 @@ test("bank conflicts: the transpose column, then padded", async ({ page }) => {
     "data-queued",
     "0",
   );
-  await fig.getByRole("slider", { name: /Padding/ }).fill("1");
+  await change(fig, () =>
+    fig.getByRole("slider", { name: /Padding/ }).fill("1"),
+  );
   const r1 = fx.banks.find((b) => b.pattern === "col" && b.pad === 1)!
     .out as unknown as BankResult;
   await show(fig, 32);
@@ -189,7 +206,9 @@ test("GEMM: the shared-memory march, then register blocking", async ({
       marchCaption("smem", GEMM_MARCH.smem, m[s]!, 16, 4),
     );
   }
-  await fig.getByRole("radio", { name: "register blocking" }).click();
+  await change(fig, () =>
+    fig.getByRole("radio", { name: "register blocking" }).click(),
+  );
   const r = fx.gemmMarch.regs as unknown as MarchStep[];
   await show(fig, 16);
   await expect(fig.getByTestId("caption")).toHaveText(
@@ -209,7 +228,9 @@ test("reductions: sequential addressing, then shuffles", async ({ page }) => {
     await show(fig, s);
     await expect(fig.getByTestId("caption")).toHaveText(reduceCaption(seq, s));
   }
-  await fig.getByRole("radio", { name: "warp shuffle" }).click();
+  await change(fig, () =>
+    fig.getByRole("radio", { name: "warp shuffle" }).click(),
+  );
   const sh = fx.reduce.shuffle as unknown as ReduceResult;
   for (const s of [1, 6]) {
     await show(fig, s);
@@ -240,7 +261,9 @@ test("online softmax: blocks of 4, then 8", async ({ page }) => {
     await show(fig, s);
     await expect(fig.getByTestId("caption")).toHaveText(softmaxCaption(o4, s));
   }
-  await fig.getByRole("radio", { name: "8" }).first().click();
+  await change(fig, () =>
+    fig.getByRole("radio", { name: "8" }).first().click(),
+  );
   const o8 = fx.softmax.find((x) => x.seed === 127 && x.block === 8)!
     .out as unknown as OnlineSoftmax;
   await show(fig, 3);
@@ -259,7 +282,9 @@ test("overlap: double buffering the compute-heavy tiles", async ({ page }) => {
       timelineCaption(t, s, 6),
     );
   }
-  await fig.getByRole("radio", { name: "1" }).first().click();
+  await change(fig, () =>
+    fig.getByRole("radio", { name: "1" }).first().click(),
+  );
   const one = fx.timelineSteps.find((x) => x.args.join() === "6,2,3,1,1")!
     .steps as unknown as TimelineStep[];
   await show(fig, one.length - 1);
