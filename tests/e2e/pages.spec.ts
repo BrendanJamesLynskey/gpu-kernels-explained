@@ -79,8 +79,10 @@ test("the six-way site switch: a row on desktop, a dropdown on phones", async ({
     "href",
     "https://numerics-explained.vercel.app",
   );
-  await expect(row.getByText("Silicon")).toBeVisible();
-  await expect(row.getByRole("link", { name: /Silicon/ })).toHaveCount(0);
+  await expect(row.getByRole("link", { name: "Silicon" })).toHaveAttribute(
+    "href",
+    "https://systolic-arrays-explained.vercel.app",
+  );
   await page.setViewportSize({ width: 390, height: 800 });
   await expect(row).toBeHidden();
   const compact = page.locator("[data-site-switch='compact']");

@@ -8,6 +8,7 @@ import Link from "next/link";
 import {
   ARCHITECTURES_URL,
   NUMERICS_URL,
+  SILICON_URL,
   CUDA_HUB,
   DECODER_URL,
   GITHUB_URL,
@@ -49,10 +50,14 @@ export default function AboutPage(): JSX.Element {
           ,{" "}
           <a href={ARCHITECTURES_URL} className={A}>
             LLM Architectures Explained
-          </a>{" "}
-          and{" "}
+          </a>
+          ,{" "}
           <a href={NUMERICS_URL} className={A}>
             Numerics Explained
+          </a>{" "}
+          and{" "}
+          <a href={SILICON_URL} className={A}>
+            Systolic Arrays Explained
           </a>
           . Each chapter links the matching slides of the{" "}
           <a href={NVIDIA_GPU_HUB} className={A}>

@@ -7,6 +7,7 @@ import {
   DECODER_URL,
   INFERENCE_URL,
   NUMERICS_URL,
+  SILICON_URL,
 } from "@/lib/site";
 import { formatValue, lookup } from "@/lib/gpu/values";
 
@@ -104,14 +105,21 @@ export default function HomePage(): JSX.Element {
         >
           LLM Architectures Explained
         </a>{" "}
-        (how the models differ) and{" "}
+        (how the models differ),{" "}
         <a
           href={NUMERICS_URL}
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
           Numerics Explained
         </a>{" "}
-        (the numbers themselves). This site is the layer underneath: the
+        (the numbers themselves) and{" "}
+        <a
+          href={SILICON_URL}
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Systolic Arrays Explained
+        </a>{" "}
+        (the matrix hardware of TPUs). This site is the layer underneath: the
         kernels. How it was built, and how to check it:{" "}
         <Link
           href="/about"
