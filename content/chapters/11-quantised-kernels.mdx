@@ -26,7 +26,7 @@ When the whole layer has enough tokens to be compute-bound, the bytes stop matte
 
 The second animation applies one 8192 × 8192 layer (67 million weights) to a growing batch of tokens. At batch 1 on the A100 the model gives <V of="a100.quant.bf16.1.total" fmt="time" /> in BF16, <V of="a100.quant.int8.1.total" fmt="time" /> in INT8 and <V of="a100.quant.int4.1.total" fmt="time" /> in INT4: <V of="a100.quant.int4.1.weight_bytes" fmt="bytes" /> of INT4 weights and scales instead of <V of="a100.quant.bf16.1.weight_bytes" fmt="bytes" />. The lines stay flat while the batch shares one read of the weights, then bend upwards where the tensor cores take over, and the INT4 line bends first, because it has fewer bytes to hide behind. From there on, the weight-only formats are no faster than BF16, and only W8A8, with its INT8 tensor cores, keeps an advantage.
 
-So quantisation is mainly a decode-time (small-batch) optimisation for weights, and a compute-time one only when the maths itself is narrower. The accuracy side, which formats and scales keep a model's quality, is for the Numerics site (coming).
+So quantisation is mainly a decode-time (small-batch) optimisation for weights, and a compute-time one only when the maths itself is narrower. The accuracy side, which formats and scales keep a model's quality, is the subject of [Numerics Explained](https://numerics-explained.vercel.app/learn): its [outliers chapter](https://numerics-explained.vercel.app/learn/06-outliers) shows why W8A8 needs care, and its [GPTQ](https://numerics-explained.vercel.app/learn/07-gptq) and [AWQ and NF4](https://numerics-explained.vercel.app/learn/08-awq-and-nf4) chapters how 4-bit weights keep their accuracy.
 
 </Layer>
 
@@ -99,6 +99,6 @@ for (int j = 0; j < 8; ++j) {
 - NVIDIA GPU series: [Number formats explained](https://brendanjameslynskey.github.io/NVIDIA_GPU_03_Tensor_Cores/#slide-08), [Quantization recipes](https://brendanjameslynskey.github.io/NVIDIA_GPU_19_TensorRT_LLM/#slide-06) and [Performance model: decode-bound vs prefill-bound](https://brendanjameslynskey.github.io/NVIDIA_GPU_10_Software_and_Performance/#slide-09).
 - Frantar et al., [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323) (2022); Lin et al., [AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978) (2023); Dettmers et al., [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339) (2022).
 - NVIDIA, [A100 whitepaper](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf), Table 4 (the INT8 tensor peak), and the [H100 product page](https://www.nvidia.com/en-us/data-center/h100/) (FP8 Tensor Core: 3,958 teraFLOPS with sparsity, half that dense).
-- [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) for where decode time goes in a whole model.
+- [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) for where decode time goes in a whole model, and [Numerics Explained](https://numerics-explained.vercel.app/learn/10-hardware) for what the narrow formats cost in accuracy and save in energy.
 
 </Callout>
