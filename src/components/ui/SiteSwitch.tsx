@@ -51,8 +51,8 @@ const SITES = [
     key: "silicon",
     label: "Silicon",
     href: "https://systolic-arrays-explained.vercel.app",
-    title: "Systolic Arrays Explained: the silicon underneath (coming soon)",
-    live: false,
+    title: "Systolic Arrays Explained: the silicon underneath",
+    live: true,
   },
 ] as const;
 
