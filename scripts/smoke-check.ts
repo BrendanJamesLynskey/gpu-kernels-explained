@@ -15,7 +15,7 @@
  * the presets page must print the model's own numbers (computed here with
  * the same code), every chapter must render its MDX (a layer, server-
  * rendered KaTeX and the animation's placeholder), and the header must
- * carry the six-way site switch with Kernels current.
+ * carry the seven-way site switch with Kernels current.
  */
 import { fmtRate } from "@/lib/format";
 import { derived, preset } from "@/lib/gpu/model";

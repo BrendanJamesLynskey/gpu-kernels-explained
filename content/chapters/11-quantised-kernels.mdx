@@ -100,5 +100,6 @@ for (int j = 0; j < 8; ++j) {
 - Frantar et al., [GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers](https://arxiv.org/abs/2210.17323) (2022); Lin et al., [AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration](https://arxiv.org/abs/2306.00978) (2023); Dettmers et al., [LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale](https://arxiv.org/abs/2208.07339) (2022).
 - NVIDIA, [A100 whitepaper](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf), Table 4 (the INT8 tensor peak), and the [H100 product page](https://www.nvidia.com/en-us/data-center/h100/) (FP8 Tensor Core: 3,958 teraFLOPS with sparsity, half that dense).
 - [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) for where decode time goes in a whole model, and [Numerics Explained](https://numerics-explained.vercel.app/learn/10-hardware) for what the narrow formats cost in accuracy and save in energy.
+- Inference Trade-offs Explained: [quantisation as a serving lever](https://inference-tradeoffs-explained.vercel.app/learn/09-quantisation), what FP8 and INT4 weights and an FP8 KV cache do to goodput, latency, cost and energy on five workloads (simulated).
 
 </Callout>

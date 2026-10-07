@@ -1,9 +1,10 @@
 /**
  * Cross-site navigation between the companion sites: Decoder · Inference ·
- * Architectures · Kernels · Numerics · Silicon. The same file, byte for
- * byte, sits in every site's header; only the `current` prop differs.
+ * Architectures · Kernels · Numerics · Silicon · Trade-offs. The same file,
+ * byte for byte, sits in every site's header; only the `current` prop
+ * differs.
  *
- * Six items do not fit one row on a 390 px phone, so the switch is a full
+ * Seven items do not fit one row on a 390 px phone, so the switch is a full
  * row from the `sm` breakpoint up and a compact dropdown (a native
  * <details>, no JavaScript) below it. A site that is not live yet is shown
  * but not linked; flip `live` when it launches (on every site).
@@ -52,6 +53,13 @@ const SITES = [
     label: "Silicon",
     href: "https://systolic-arrays-explained.vercel.app",
     title: "Systolic Arrays Explained: the silicon underneath",
+    live: true,
+  },
+  {
+    key: "tradeoffs",
+    label: "Trade-offs",
+    href: "https://inference-tradeoffs-explained.vercel.app",
+    title: "Inference Trade-offs Explained: which lever helps which metric",
     live: true,
   },
 ] as const;

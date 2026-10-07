@@ -8,6 +8,7 @@ import {
   INFERENCE_URL,
   NUMERICS_URL,
   SILICON_URL,
+  TRADEOFFS_URL,
 } from "@/lib/site";
 import { formatValue, lookup } from "@/lib/gpu/values";
 
@@ -112,15 +113,22 @@ export default function HomePage(): JSX.Element {
         >
           Numerics Explained
         </a>{" "}
-        (the numbers themselves) and{" "}
+        (the numbers themselves),{" "}
         <a
           href={SILICON_URL}
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
           Systolic Arrays Explained
         </a>{" "}
-        (the matrix hardware of TPUs). This site is the layer underneath: the
-        kernels. How it was built, and how to check it:{" "}
+        (the matrix hardware of TPUs) and{" "}
+        <a
+          href={TRADEOFFS_URL}
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Inference Trade-offs Explained
+        </a>{" "}
+        (which serving lever helps which metric). This site is the layer
+        underneath: the kernels. How it was built, and how to check it:{" "}
         <Link
           href="/about"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"

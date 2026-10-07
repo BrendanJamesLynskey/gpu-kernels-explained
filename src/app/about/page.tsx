@@ -9,6 +9,7 @@ import {
   ARCHITECTURES_URL,
   NUMERICS_URL,
   SILICON_URL,
+  TRADEOFFS_URL,
   CUDA_HUB,
   DECODER_URL,
   GITHUB_URL,
@@ -54,10 +55,14 @@ export default function AboutPage(): JSX.Element {
           ,{" "}
           <a href={NUMERICS_URL} className={A}>
             Numerics Explained
-          </a>{" "}
-          and{" "}
+          </a>
+          ,{" "}
           <a href={SILICON_URL} className={A}>
             Systolic Arrays Explained
+          </a>{" "}
+          and{" "}
+          <a href={TRADEOFFS_URL} className={A}>
+            Inference Trade-offs Explained
           </a>
           . Each chapter links the matching slides of the{" "}
           <a href={NVIDIA_GPU_HUB} className={A}>
