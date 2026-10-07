@@ -38,7 +38,7 @@ page without the content that proves it rendered from the model: the
 landing page's ridge point and the presets page's bandwidths (computed by
 the smoke script with the same model code), the status chips, every
 chapter's MDX (a layer, server-rendered KaTeX and the animation's
-placeholder), and the seven-way site switch with Kernels current. Then open
+placeholder), and the two-group site switch with Kernels current. Then open
 one chapter in a browser and press **Play**, step and scrub: the animations
 run client-side, which the smoke check can't see. With reduce-motion set in
 the OS, nothing should play until you press Play.
