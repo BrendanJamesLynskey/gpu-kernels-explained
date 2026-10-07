@@ -16,11 +16,14 @@ shows how a model is served, [LLM Architectures Explained](https://llm-architect
 shows how the models differ, and this site is the layer underneath: the
 kernels. They share one design system and link to each other from the
 header ("Decoder · Inference · Architectures · Kernels · Numerics ·
-Silicon").
+Silicon · Trade-offs").
 [Numerics Explained](https://numerics-explained.vercel.app/) covers the
 accuracy side of the quantised kernels in chapter 11, and
 [Systolic Arrays Explained](https://systolic-arrays-explained.vercel.app/)
 is the other way to build a matrix engine (chapters 7 and 10 link it).
+[Inference Trade-offs Explained](https://inference-tradeoffs-explained.vercel.app/)
+measures what the quantised kernels (chapter 11) and the overlap of
+communication (chapter 10) are worth to a whole serving system.
 
 **Live:** [gpu-kernels-explained.vercel.app](https://gpu-kernels-explained.vercel.app/)
 

@@ -62,7 +62,7 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("the six-way site switch: a row on desktop, a dropdown on phones", async ({
+test("the seven-way site switch: a row on desktop, a dropdown on phones", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -82,6 +82,10 @@ test("the six-way site switch: a row on desktop, a dropdown on phones", async ({
   await expect(row.getByRole("link", { name: "Silicon" })).toHaveAttribute(
     "href",
     "https://systolic-arrays-explained.vercel.app",
+  );
+  await expect(row.getByRole("link", { name: "Trade-offs" })).toHaveAttribute(
+    "href",
+    "https://inference-tradeoffs-explained.vercel.app",
   );
   await page.setViewportSize({ width: 390, height: 800 });
   await expect(row).toBeHidden();
