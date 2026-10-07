@@ -15,8 +15,11 @@ shows one forward pass, [LLM Inference Explained](https://llm-inference-explaine
 shows how a model is served, [LLM Architectures Explained](https://llm-architectures-explained.vercel.app/)
 shows how the models differ, and this site is the layer underneath: the
 kernels. They share one design system and link to each other from the
-header ("Decoder · Inference · Architectures · Kernels · Numerics ·
-Silicon · Trade-offs").
+header, in two groups: "LLM systems" (Decoder · Inference · Architectures ·
+Kernels · Numerics · Silicon · Trade-offs) and "Agents", which starts with
+[Agent Harnesses Explained](https://agent-harnesses-explained.vercel.app/)
+(the loop, tools, context and permissions that turn a model into an agent;
+five more agent sites are marked "soon").
 [Numerics Explained](https://numerics-explained.vercel.app/) covers the
 accuracy side of the quantised kernels in chapter 11, and
 [Systolic Arrays Explained](https://systolic-arrays-explained.vercel.app/)
