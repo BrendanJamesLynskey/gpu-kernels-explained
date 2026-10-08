@@ -87,7 +87,7 @@ const SITES = [
     label: "Protocols",
     href: "https://agent-protocols-explained.vercel.app",
     title: "Agent Protocols Explained: MCP, transports, auth and A2A",
-    live: false,
+    live: true,
   },
   {
     key: "context",

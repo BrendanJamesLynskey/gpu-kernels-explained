@@ -33,6 +33,7 @@ const SWITCH = [
   'data-site-switch="compact"',
   'href="https://gpu-kernels-explained.vercel.app"',
   'href="https://agent-harnesses-explained.vercel.app"',
+  'href="https://agent-protocols-explained.vercel.app"',
 ];
 
 async function checkPage(
