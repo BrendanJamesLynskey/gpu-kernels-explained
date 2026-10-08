@@ -19,7 +19,8 @@ header, in two groups: "LLM systems" (Decoder · Inference · Architectures ·
 Kernels · Numerics · Silicon · Trade-offs) and "Agents", which starts with
 [Agent Harnesses Explained](https://agent-harnesses-explained.vercel.app/)
 (the loop, tools, context and permissions that turn a model into an agent;
-five more agent sites are marked "soon").
+then [Agent Protocols Explained](https://agent-protocols-explained.vercel.app/),
+MCP and A2A on the wire; four more agent sites are marked "soon").
 [Numerics Explained](https://numerics-explained.vercel.app/) covers the
 accuracy side of the quantised kernels in chapter 11, and
 [Systolic Arrays Explained](https://systolic-arrays-explained.vercel.app/)
