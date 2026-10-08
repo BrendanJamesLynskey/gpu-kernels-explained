@@ -100,7 +100,11 @@ test("the two-group site switch: a toggle and a row on desktop, a dropdown below
     "href",
     "https://agent-protocols-explained.vercel.app",
   );
-  for (const soon of ["Context", "Orchestration", "Evals", "Security"]) {
+  await expect(agents.getByRole("link", { name: "Context" })).toHaveAttribute(
+    "href",
+    "https://agent-context-explained.vercel.app",
+  );
+  for (const soon of ["Orchestration", "Evals", "Security"]) {
     await expect(agents.getByText(soon)).toBeVisible();
     await expect(agents.getByRole("link", { name: soon })).toHaveCount(0);
   }
@@ -129,6 +133,10 @@ test("the two-group site switch: a toggle and a row on desktop, a dropdown below
   await expect(
     compact.getByRole("link", { name: "Protocols" }),
   ).toHaveAttribute("href", "https://agent-protocols-explained.vercel.app");
+  await expect(compact.getByRole("link", { name: "Context" })).toHaveAttribute(
+    "href",
+    "https://agent-context-explained.vercel.app",
+  );
   await expect(compact.getByText("Security")).toBeVisible();
   await expect(compact.getByRole("link", { name: "Security" })).toHaveCount(0);
   const box = await compact
