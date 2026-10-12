@@ -16,7 +16,8 @@ shows how a model is served, [LLM Architectures Explained](https://llm-architect
 shows how the models differ, and this site is the layer underneath: the
 kernels. They share one design system and link to each other from the
 header, in two groups: "LLM systems" (Decoder · Inference · Architectures ·
-Kernels · Numerics · Silicon · Trade-offs) and "Agents", which starts with
+Kernels · Numerics · Silicon · Trade-offs ·
+[Compute in transit](https://compute-in-transit-results.vercel.app/)) and "Agents", which starts with
 [Agent Harnesses Explained](https://agent-harnesses-explained.vercel.app/)
 (the loop, tools, context and permissions that turn a model into an agent;
 then [Agent Protocols Explained](https://agent-protocols-explained.vercel.app/),

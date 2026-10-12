@@ -1,7 +1,8 @@
 /**
  * Cross-site navigation between the companion sites, in two groups:
  *
- *   LLM systems: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
+ *   LLM systems: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs ·
+ *                Compute in transit
  *   Agents:      Harnesses · Protocols · Context · Orchestration · Evals · Security
  *
  * The same file, byte for byte, sits in every site's header; only the `current` prop differs.
@@ -71,6 +72,15 @@ const SITES = [
     label: "Trade-offs",
     href: "https://inference-tradeoffs-explained.vercel.app",
     title: "Inference Trade-offs Explained: which lever helps which metric",
+    live: true,
+  },
+  {
+    key: "transit",
+    group: "llm",
+    label: "Compute in transit",
+    href: "https://compute-in-transit-results.vercel.app",
+    title:
+      "Compute in Transit: an investigation of computing on gradients in the network",
     live: true,
   },
   {
