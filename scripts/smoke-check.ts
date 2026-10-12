@@ -29,8 +29,7 @@ const headers: Record<string, string> = process.env.VERCEL_BYPASS
   : {};
 
 const SWITCH = [
-  'data-site-switch="full"',
-  'data-site-switch="compact"',
+  'data-site-switch="menu"',
   'href="https://gpu-kernels-explained.vercel.app"',
   'href="https://agent-harnesses-explained.vercel.app"',
   'href="https://agent-protocols-explained.vercel.app"',

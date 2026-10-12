@@ -62,135 +62,89 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("the three-group site switch: a toggle and a row on desktop, a dropdown below lg", async ({
+test("the site switch: one Site menu listing every group, at every width", async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/");
-  const full = page.locator("[data-site-switch='full']");
-  await expect(full).toBeVisible();
-  const inference = full.locator("nav[data-site-group='inference']");
-  const training = full.locator("nav[data-site-group='training']");
-  const agents = full.locator("nav[data-site-group='agents']");
-  // each group's row is one line that ends inside the viewport (no wrap at 1280 px)
-  const oneLine = async (row: typeof inference) => {
-    const tops = await row
-      .locator("a, span[aria-disabled]")
-      .evaluateAll((els) =>
-        els.map((e) => Math.round(e.getBoundingClientRect().top)),
-      );
-    expect(new Set(tops).size).toBe(1);
-    const b = await row.boundingBox();
-    expect(b!.x + b!.width).toBeLessThanOrEqual(1280);
-  };
-  // starts on this site's group
-  await expect(inference).toBeVisible();
-  await expect(training).toBeHidden();
-  await expect(agents).toBeHidden();
-  await expect(
-    inference.getByRole("link", { name: "Kernels" }),
-  ).toHaveAttribute("aria-current", "true");
-  // each toggle label shows its own group's row (CSS only)
-  await full.locator("label[for='site-switch-inference']").click();
-  await expect(inference).toBeVisible();
-  await expect(training).toBeHidden();
-  await expect(agents).toBeHidden();
-  await oneLine(inference);
-  for (const [name, href] of [
-    ["Decoder", "https://transformer-decoder-explained.vercel.app"],
-    ["Inference", "https://llm-inference-explained.vercel.app"],
-    ["Architectures", "https://llm-architectures-explained.vercel.app"],
-    ["Kernels", "https://gpu-kernels-explained.vercel.app"],
-    ["Numerics", "https://numerics-explained.vercel.app"],
-    ["Silicon", "https://systolic-arrays-explained.vercel.app"],
-    ["Trade-offs", "https://inference-tradeoffs-explained.vercel.app"],
-  ] as const)
-    await expect(inference.getByRole("link", { name })).toHaveAttribute(
+  const menu = page.locator("[data-site-switch='menu']");
+  const panel = menu.locator("summary + div");
+  const training = menu.locator("nav[data-site-group='training']");
+  const inference = menu.locator("nav[data-site-group='inference']");
+  const agents = menu.locator("nav[data-site-group='agents']");
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    // closed: one button naming this site
+    await expect(menu).toBeVisible();
+    await expect(menu.locator("summary")).toContainText("Kernels");
+    await expect(panel).toBeHidden();
+    // one click opens every group, in the order Training, Inference, Agents
+    await menu.locator("summary").click();
+    await expect(panel).toBeVisible();
+    await expect(menu.locator("nav > p")).toHaveText([
+      "Training",
+      "Inference",
+      "Agents",
+    ]);
+    // this site is highlighted
+    await expect(
+      menu.getByRole("link", { name: "Kernels", exact: true }),
+    ).toHaveAttribute("aria-current", "true");
+    await expect(
+      training.getByRole("link", { name: "Training", exact: true }),
+    ).toHaveAttribute(
       "href",
-      href,
+      "https://transformer-decoder-explained.vercel.app/training",
     );
-  await expect(
-    inference.getByRole("link", { name: "Compute in transit" }),
-  ).toHaveCount(0);
-  await full.locator("label[for='site-switch-training']").click();
-  await expect(training).toBeVisible();
-  await expect(inference).toBeHidden();
-  await expect(agents).toBeHidden();
-  await oneLine(training);
-  // Training is part of the decoder site and not live yet
-  await expect(
-    training.locator("span[aria-disabled]", { hasText: "Training" }),
-  ).toBeVisible();
-  await expect(training.getByRole("link", { name: "Training" })).toHaveCount(0);
-  await expect(training.getByText("Compute in transit")).toHaveCount(0);
-  await full.locator("label[for='site-switch-agents']").click();
-  await expect(agents).toBeVisible();
-  await expect(inference).toBeHidden();
-  await expect(training).toBeHidden();
-  await oneLine(agents);
-  for (const [name, href] of [
-    ["Harnesses", "https://agent-harnesses-explained.vercel.app"],
-    ["Protocols", "https://agent-protocols-explained.vercel.app"],
-    ["Context", "https://agent-context-explained.vercel.app"],
-    ["Orchestration", "https://agent-orchestration-explained.vercel.app"],
-  ] as const)
-    await expect(agents.getByRole("link", { name })).toHaveAttribute(
-      "href",
-      href,
+    await expect(panel.getByText("Compute in transit")).toHaveCount(0);
+    for (const [name, href] of [
+      ["Decoder", "https://transformer-decoder-explained.vercel.app"],
+      ["Inference", "https://llm-inference-explained.vercel.app"],
+      ["Architectures", "https://llm-architectures-explained.vercel.app"],
+      ["Kernels", "https://gpu-kernels-explained.vercel.app"],
+      ["Numerics", "https://numerics-explained.vercel.app"],
+      ["Silicon", "https://systolic-arrays-explained.vercel.app"],
+      ["Trade-offs", "https://inference-tradeoffs-explained.vercel.app"],
+    ] as const)
+      await expect(
+        inference.getByRole("link", { name, exact: true }),
+      ).toHaveAttribute("href", href);
+    for (const [name, href] of [
+      ["Harnesses", "https://agent-harnesses-explained.vercel.app"],
+      ["Protocols", "https://agent-protocols-explained.vercel.app"],
+      ["Context", "https://agent-context-explained.vercel.app"],
+      ["Orchestration", "https://agent-orchestration-explained.vercel.app"],
+    ] as const)
+      await expect(
+        agents.getByRole("link", { name, exact: true }),
+      ).toHaveAttribute("href", href);
+    for (const soon of ["Evals", "Security"]) {
+      await expect(agents.getByText(soon)).toBeVisible();
+      await expect(agents.getByRole("link", { name: soon })).toHaveCount(0);
+    }
+    // every entry is a 44 px touch target
+    const decoder = await inference
+      .getByRole("link", { name: "Decoder", exact: true })
+      .boundingBox();
+    expect(decoder!.height).toBeGreaterThanOrEqual(44);
+    // the groups sit side by side on desktop and stack on a phone
+    const t = (await training.boundingBox())!;
+    const a = (await agents.boundingBox())!;
+    if (width >= 1024) expect(Math.round(a.y)).toBe(Math.round(t.y));
+    else expect(a.y).toBeGreaterThan(t.y);
+    // the open panel stays on screen and the page never scrolls sideways
+    const p = (await panel.boundingBox())!;
+    expect(p.x).toBeGreaterThanOrEqual(0);
+    expect(p.x + p.width).toBeLessThanOrEqual(width);
+    const overflow = await page.evaluate(
+      () =>
+        document.scrollingElement!.scrollWidth -
+        document.scrollingElement!.clientWidth,
     );
-  for (const soon of ["Evals", "Security"]) {
-    await expect(agents.getByText(soon)).toBeVisible();
-    await expect(agents.getByRole("link", { name: soon })).toHaveCount(0);
+    expect(overflow).toBeLessThanOrEqual(0);
   }
-  // keyboard: the toggle is a set of radio buttons
-  await page.getByRole("radio", { name: "Show the inference sites" }).focus();
-  await page.keyboard.press("Space");
-  await expect(inference).toBeVisible();
-  await expect(agents).toBeHidden();
-
-  // below lg (not sm): the dropdown, with all three groups under headings
-  await page.setViewportSize({ width: 768, height: 800 });
-  await expect(full).toBeHidden();
-  const compact = page.locator("[data-site-switch='compact']");
-  await expect(compact).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 800 });
-  await expect(compact).toBeVisible();
-  await compact.locator("summary").click();
-  await expect(compact.locator("nav > p")).toHaveText([
-    "Inference",
-    "Training",
-    "Agents",
-  ]);
-  await expect(compact.getByRole("link", { name: "Kernels" })).toHaveAttribute(
-    "aria-current",
-    "true",
-  );
-  await expect(
-    compact.getByRole("link", { name: "Trade-offs" }),
-  ).toHaveAttribute("href", "https://inference-tradeoffs-explained.vercel.app");
-  await expect(compact.getByRole("link", { name: "Context" })).toHaveAttribute(
-    "href",
-    "https://agent-context-explained.vercel.app",
-  );
-  await expect(
-    compact.getByRole("link", { name: "Orchestration" }),
-  ).toHaveAttribute("href", "https://agent-orchestration-explained.vercel.app");
-  await expect(
-    compact.locator("span[aria-disabled]", { hasText: "Training" }),
-  ).toBeVisible();
-  await expect(compact.getByText("Security")).toBeVisible();
-  await expect(compact.getByRole("link", { name: "Security" })).toHaveCount(0);
-  await expect(
-    compact.getByRole("link", { name: "Compute in transit" }),
-  ).toHaveCount(0);
-  const box = await compact
-    .getByRole("link", { name: "Decoder" })
-    .boundingBox();
-  expect(box!.height).toBeGreaterThanOrEqual(44);
-  const overflow = await page.evaluate(
-    () =>
-      document.scrollingElement!.scrollWidth -
-      document.scrollingElement!.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+  // keyboard: Enter on the button opens the menu (a native <details>, no JavaScript)
+  await page.goto("/");
+  await menu.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(panel).toBeVisible();
 });
