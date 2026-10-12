@@ -72,7 +72,6 @@ test("the three-group site switch: a toggle and a row on desktop, a dropdown bel
   const inference = full.locator("nav[data-site-group='inference']");
   const training = full.locator("nav[data-site-group='training']");
   const agents = full.locator("nav[data-site-group='agents']");
-  const TRANSIT = "https://compute-in-transit-results.vercel.app";
   // each group's row is one line that ends inside the viewport (no wrap at 1280 px)
   const oneLine = async (row: typeof inference) => {
     const tops = await row
@@ -123,9 +122,7 @@ test("the three-group site switch: a toggle and a row on desktop, a dropdown bel
     training.locator("span[aria-disabled]", { hasText: "Training" }),
   ).toBeVisible();
   await expect(training.getByRole("link", { name: "Training" })).toHaveCount(0);
-  await expect(
-    training.getByRole("link", { name: "Compute in transit" }),
-  ).toHaveAttribute("href", TRANSIT);
+  await expect(training.getByText("Compute in transit")).toHaveCount(0);
   await full.locator("label[for='site-switch-agents']").click();
   await expect(agents).toBeVisible();
   await expect(inference).toBeHidden();
@@ -185,7 +182,7 @@ test("the three-group site switch: a toggle and a row on desktop, a dropdown bel
   await expect(compact.getByRole("link", { name: "Security" })).toHaveCount(0);
   await expect(
     compact.getByRole("link", { name: "Compute in transit" }),
-  ).toHaveAttribute("href", TRANSIT);
+  ).toHaveCount(0);
   const box = await compact
     .getByRole("link", { name: "Decoder" })
     .boundingBox();

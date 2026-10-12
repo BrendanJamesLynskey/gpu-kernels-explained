@@ -2,7 +2,7 @@
  * Cross-site navigation between the companion sites, in three groups:
  *
  *   Inference: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
- *   Training:  Training · Compute in transit
+ *   Training:  Training
  *   Agents:    Harnesses · Protocols · Context · Orchestration · Evals · Security
  *
  * The same file, byte for byte, sits in every site's header; only the `current` prop differs.
@@ -14,8 +14,9 @@
  * - Below `lg`: one "Sites" dropdown (a native <details>) listing all groups under headings.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
- * launches (on every site). An entry with `hideOn` is left out of the switch on the sites
- * whose keys it lists. Server Component.
+ * launches (on every site). An `unlisted` entry is never shown in the switch; it is kept so
+ * that its site can still pass its own key as `current` (the Compute in Transit results site
+ * names itself in the dropdown summary). Server Component.
  */
 
 const SITES = [
@@ -91,7 +92,7 @@ const SITES = [
     title:
       "Compute in Transit: an investigation of computing on gradients in the network",
     live: true,
-    hideOn: ["decoder"],
+    unlisted: true,
   },
   {
     key: "harnesses",
@@ -153,12 +154,9 @@ const GROUPS = [
 export type SiteKey = (typeof SITES)[number]["key"];
 type Site = (typeof SITES)[number];
 
-/** The entries of one group that are shown on the `current` site (`hideOn` filtered out). */
-function sitesIn(group: string, current: SiteKey): Site[] {
-  return SITES.filter((s) => {
-    const hideOn: readonly string[] = "hideOn" in s ? s.hideOn : [];
-    return s.group === group && !hideOn.includes(current);
-  });
+/** The entries of one group that are shown in the switch (`unlisted` ones left out). */
+function sitesIn(group: string): Site[] {
+  return SITES.filter((s) => s.group === group && !("unlisted" in s));
 }
 
 const ITEM =
@@ -214,7 +212,7 @@ function Row({
       data-site-group={group.key}
       className={className}
     >
-      {sitesIn(group.key, current).map((s, i) => (
+      {sitesIn(group.key).map((s, i) => (
         <span key={s.key} className="inline-flex items-center">
           {i > 0 && (
             <span aria-hidden className="text-neutral-400">
@@ -317,7 +315,7 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
               <p className="px-2.5 pb-1 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
                 {g.label}
               </p>
-              {sitesIn(g.key, current).map((s) => (
+              {sitesIn(g.key).map((s) => (
                 <Item key={s.key} s={s} current={current} block />
               ))}
             </nav>

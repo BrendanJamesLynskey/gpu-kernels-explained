@@ -35,7 +35,6 @@ const SWITCH = [
   'href="https://agent-harnesses-explained.vercel.app"',
   'href="https://agent-protocols-explained.vercel.app"',
   'href="https://agent-context-explained.vercel.app"',
-  'href="https://compute-in-transit-results.vercel.app"',
   'href="https://agent-orchestration-explained.vercel.app"',
   'data-site-group="training"',
 ];
