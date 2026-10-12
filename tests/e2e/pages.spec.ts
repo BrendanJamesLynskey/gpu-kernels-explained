@@ -93,7 +93,7 @@ test("the site switch: one Site menu listing every group, at every width", async
       training.getByRole("link", { name: "Training", exact: true }),
     ).toHaveAttribute(
       "href",
-      "https://transformer-decoder-explained.vercel.app/training",
+      "https://transformer-training-explained.vercel.app",
     );
     await expect(panel.getByText("Compute in transit")).toHaveCount(0);
     for (const [name, href] of [
