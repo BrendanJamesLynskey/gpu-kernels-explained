@@ -10,7 +10,9 @@
  * One "Site: <this site> ▾" button at every width. It is a native <details>, so it works with
  * no JavaScript: one click opens a panel listing every group under its heading (side by side
  * from the `lg` breakpoint up, stacked below it), and one click on a site goes there. The
- * current site is highlighted.
+ * current site is highlighted. The panel is placed against the window's edge (16 px in from both
+ * sides on a phone, the right side from `lg`), not against the button, so it stays on screen
+ * wherever a site's header puts the button.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
  * launches (on every site). An `unlisted` entry is never shown in the switch; it is kept so
@@ -194,7 +196,7 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
         <span className="font-medium">{here.label}</span>
         <span aria-hidden>▾</span>
       </summary>
-      <div className="absolute right-0 z-20 mt-1 flex max-h-[70vh] w-52 flex-col gap-1 overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg lg:max-h-none lg:w-[30rem] lg:flex-row lg:gap-2 lg:p-2 dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="fixed left-4 right-4 z-20 mt-1 flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg lg:left-auto lg:max-h-none lg:w-[30rem] lg:flex-row lg:gap-2 lg:p-2 dark:border-neutral-700 dark:bg-neutral-900">
         {GROUPS.map((g) => (
           <nav
             key={g.key}
