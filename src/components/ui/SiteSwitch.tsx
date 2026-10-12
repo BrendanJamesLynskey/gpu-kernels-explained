@@ -1,25 +1,44 @@
 /**
  * Cross-site navigation between the companion sites, in three groups:
  *
- *   Inference: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
  *   Training:  Training
+ *   Inference: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
  *   Agents:    Harnesses · Protocols · Context · Orchestration · Evals · Security
  *
  * The same file, byte for byte, sits in every site's header; only the `current` prop differs.
  *
- * - From the `lg` breakpoint up: a group toggle ("Inference | Training | Agents") and the
- *   chosen group's row. The toggle is a set of radio buttons, and CSS (Tailwind's
- *   `peer-checked`) shows the matching row, so it works with no JavaScript. It starts on the
- *   current site's group.
- * - Below `lg`: one "Sites" dropdown (a native <details>) listing all groups under headings.
+ * One "Site: <this site> ▾" button at every width. It is a native <details>, so it works with
+ * no JavaScript: one click opens a panel listing every group under its heading (side by side
+ * from the `lg` breakpoint up, stacked below it), and one click on a site goes there. The
+ * current site is highlighted. The panel is placed against the window's edge (16 px in from both
+ * sides on a phone, the right side from `lg`), not against the button, so it stays on screen
+ * wherever a site's header puts the button.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
  * launches (on every site). An `unlisted` entry is never shown in the switch; it is kept so
  * that its site can still pass its own key as `current` (the Compute in Transit results site
- * names itself in the dropdown summary). Server Component.
+ * names itself on the button). Server Component.
  */
 
 const SITES = [
+  {
+    key: "training",
+    group: "training",
+    label: "Training",
+    href: "https://transformer-decoder-explained.vercel.app/training",
+    title: "Transformer Decoder Explained, Part 2: how a decoder is trained",
+    live: true,
+  },
+  {
+    key: "transit",
+    group: "training",
+    label: "Compute in transit",
+    href: "https://compute-in-transit-results.vercel.app",
+    title:
+      "Compute in Transit: an investigation of computing on gradients in the network",
+    live: true,
+    unlisted: true,
+  },
   {
     key: "decoder",
     group: "inference",
@@ -77,24 +96,6 @@ const SITES = [
     live: true,
   },
   {
-    key: "training",
-    group: "training",
-    label: "Training",
-    href: "https://transformer-decoder-explained.vercel.app/training",
-    title: "Transformer Decoder Explained, Part 2: how a decoder is trained",
-    live: false,
-  },
-  {
-    key: "transit",
-    group: "training",
-    label: "Compute in transit",
-    href: "https://compute-in-transit-results.vercel.app",
-    title:
-      "Compute in Transit: an investigation of computing on gradients in the network",
-    live: true,
-    unlisted: true,
-  },
-  {
     key: "harnesses",
     group: "agents",
     label: "Harnesses",
@@ -146,8 +147,8 @@ const SITES = [
 ] as const;
 
 const GROUPS = [
-  { key: "inference", label: "Inference" },
   { key: "training", label: "Training" },
+  { key: "inference", label: "Inference" },
   { key: "agents", label: "Agents" },
 ] as const;
 
@@ -160,27 +161,16 @@ function sitesIn(group: string): Site[] {
 }
 
 const ITEM =
-  "focus-ring rounded-md px-2.5 py-1 text-neutral-700 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white";
+  "focus-ring flex min-h-11 items-center rounded-md px-2.5 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white";
 const CURRENT =
-  "focus-ring rounded-md bg-accent px-2.5 py-1 font-medium text-accent-fg";
+  "focus-ring flex min-h-11 items-center rounded-md bg-accent px-2.5 font-medium text-accent-fg";
 const SOON =
-  "cursor-default px-2.5 py-1 text-neutral-500 dark:text-neutral-400";
-const TOGGLE =
-  "cursor-pointer select-none px-2.5 py-1 text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white";
+  "flex min-h-11 cursor-default items-center px-2.5 text-neutral-500 dark:text-neutral-400";
 
-function Item({
-  s,
-  current,
-  block = false,
-}: {
-  s: Site;
-  current: SiteKey;
-  block?: boolean;
-}): JSX.Element {
-  const size = block ? " flex min-h-11 items-center" : "";
+function Item({ s, current }: { s: Site; current: SiteKey }): JSX.Element {
   if (!s.live)
     return (
-      <span title={s.title} aria-disabled="true" className={SOON + size}>
+      <span title={s.title} aria-disabled="true" className={SOON}>
         {s.label}
         <span className="ml-1 text-[0.65rem]">(soon)</span>
       </span>
@@ -190,138 +180,39 @@ function Item({
       href={s.href}
       title={s.title}
       aria-current={s.key === current ? "true" : undefined}
-      className={(s.key === current ? CURRENT : ITEM) + size}
+      className={s.key === current ? CURRENT : ITEM}
     >
       {s.label}
     </a>
   );
 }
 
-function Row({
-  group,
-  current,
-  className,
-}: {
-  group: (typeof GROUPS)[number];
-  current: SiteKey;
-  className: string;
-}): JSX.Element {
-  return (
-    <nav
-      aria-label={`Companion sites: ${group.label}`}
-      data-site-group={group.key}
-      className={className}
-    >
-      {sitesIn(group.key).map((s, i) => (
-        <span key={s.key} className="inline-flex items-center">
-          {i > 0 && (
-            <span aria-hidden className="text-neutral-400">
-              ·
-            </span>
-          )}
-          <Item s={s} current={current} />
-        </span>
-      ))}
-    </nav>
-  );
-}
-
 export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
   const here = SITES.find((s) => s.key === current) ?? SITES[0];
-  const ROW =
-    "hidden items-center rounded-md border border-neutral-300 dark:border-neutral-700";
   return (
-    <>
-      {/* lg and up: the group toggle, then the chosen group's row (CSS only) */}
-      <div
-        className="hidden items-center gap-2 text-xs lg:flex"
-        data-site-switch="full"
-      >
-        <input
-          type="radio"
-          name="site-switch-group"
-          id="site-switch-inference"
-          aria-label="Show the inference sites"
-          defaultChecked={here.group === "inference"}
-          className="peer/inference sr-only"
-        />
-        <input
-          type="radio"
-          name="site-switch-group"
-          id="site-switch-training"
-          aria-label="Show the training sites"
-          defaultChecked={here.group === "training"}
-          className="peer/training sr-only"
-        />
-        <input
-          type="radio"
-          name="site-switch-group"
-          id="site-switch-agents"
-          aria-label="Show the agent sites"
-          defaultChecked={here.group === "agents"}
-          className="peer/agents sr-only"
-        />
-        <label
-          htmlFor="site-switch-inference"
-          className={`${TOGGLE} rounded-l-md border border-neutral-300 peer-checked/inference:bg-neutral-200 peer-checked/inference:font-medium peer-checked/inference:text-neutral-950 peer-focus-visible/inference:ring-2 peer-focus-visible/inference:ring-accent dark:border-neutral-700 dark:peer-checked/inference:bg-neutral-800 dark:peer-checked/inference:text-white`}
-        >
-          Inference
-        </label>
-        <label
-          htmlFor="site-switch-training"
-          className={`${TOGGLE} -ml-2 border border-l-0 border-neutral-300 peer-checked/training:bg-neutral-200 peer-checked/training:font-medium peer-checked/training:text-neutral-950 peer-focus-visible/training:ring-2 peer-focus-visible/training:ring-accent dark:border-neutral-700 dark:peer-checked/training:bg-neutral-800 dark:peer-checked/training:text-white`}
-        >
-          Training
-        </label>
-        <label
-          htmlFor="site-switch-agents"
-          className={`${TOGGLE} -ml-2 rounded-r-md border border-l-0 border-neutral-300 peer-checked/agents:bg-neutral-200 peer-checked/agents:font-medium peer-checked/agents:text-neutral-950 peer-focus-visible/agents:ring-2 peer-focus-visible/agents:ring-accent dark:border-neutral-700 dark:peer-checked/agents:bg-neutral-800 dark:peer-checked/agents:text-white`}
-        >
-          Agents
-        </label>
-        <Row
-          group={GROUPS[0]}
-          current={current}
-          className={`${ROW} peer-checked/inference:inline-flex`}
-        />
-        <Row
-          group={GROUPS[1]}
-          current={current}
-          className={`${ROW} peer-checked/training:inline-flex`}
-        />
-        <Row
-          group={GROUPS[2]}
-          current={current}
-          className={`${ROW} peer-checked/agents:inline-flex`}
-        />
+    <details className="relative text-xs" data-site-switch="menu">
+      <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md border border-neutral-300 px-3 dark:border-neutral-700">
+        <span className="text-neutral-500 dark:text-neutral-400">Site:</span>
+        <span className="font-medium">{here.label}</span>
+        <span aria-hidden>▾</span>
+      </summary>
+      <div className="fixed left-4 right-4 z-20 mt-1 flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg lg:left-auto lg:max-h-none lg:w-[30rem] lg:flex-row lg:gap-2 lg:p-2 dark:border-neutral-700 dark:bg-neutral-900">
+        {GROUPS.map((g) => (
+          <nav
+            key={g.key}
+            aria-label={`Companion sites: ${g.label}`}
+            data-site-group={g.key}
+            className="flex flex-col lg:flex-1"
+          >
+            <p className="px-2.5 pb-1 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+              {g.label}
+            </p>
+            {sitesIn(g.key).map((s) => (
+              <Item key={s.key} s={s} current={current} />
+            ))}
+          </nav>
+        ))}
       </div>
-      {/* below lg: one dropdown with all three groups */}
-      <details
-        className="relative text-xs lg:hidden"
-        data-site-switch="compact"
-      >
-        <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md border border-neutral-300 px-3 dark:border-neutral-700">
-          <span className="text-neutral-500 dark:text-neutral-400">Sites:</span>
-          <span className="font-medium">{here.label}</span>
-          <span aria-hidden>▾</span>
-        </summary>
-        <div className="absolute right-0 z-20 mt-1 flex max-h-[70vh] w-52 flex-col overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
-          {GROUPS.map((g) => (
-            <nav
-              key={g.key}
-              aria-label={`Companion sites: ${g.label}`}
-              className="flex flex-col"
-            >
-              <p className="px-2.5 pb-1 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
-                {g.label}
-              </p>
-              {sitesIn(g.key).map((s) => (
-                <Item key={s.key} s={s} current={current} block />
-              ))}
-            </nav>
-          ))}
-        </div>
-      </details>
-    </>
+    </details>
   );
 }
