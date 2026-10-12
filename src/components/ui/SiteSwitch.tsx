@@ -1,26 +1,27 @@
 /**
- * Cross-site navigation between the companion sites, in two groups:
+ * Cross-site navigation between the companion sites, in three groups:
  *
- *   LLM systems: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs ·
- *                Compute in transit
- *   Agents:      Harnesses · Protocols · Context · Orchestration · Evals · Security
+ *   Inference: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
+ *   Training:  Training · Compute in transit
+ *   Agents:    Harnesses · Protocols · Context · Orchestration · Evals · Security
  *
  * The same file, byte for byte, sits in every site's header; only the `current` prop differs.
  *
- * - From the `lg` breakpoint up: a group toggle ("LLM systems | Agents") and the chosen
- *   group's row. The toggle is a pair of radio buttons, and CSS (Tailwind's `peer-checked`)
- *   shows the matching row, so it works with no JavaScript. It starts on the current site's
- *   group.
- * - Below `lg`: one "Sites" dropdown (a native <details>) listing both groups under headings.
+ * - From the `lg` breakpoint up: a group toggle ("Inference | Training | Agents") and the
+ *   chosen group's row. The toggle is a set of radio buttons, and CSS (Tailwind's
+ *   `peer-checked`) shows the matching row, so it works with no JavaScript. It starts on the
+ *   current site's group.
+ * - Below `lg`: one "Sites" dropdown (a native <details>) listing all groups under headings.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
- * launches (on every site). Server Component.
+ * launches (on every site). An entry with `hideOn` is left out of the switch on the sites
+ * whose keys it lists. Server Component.
  */
 
 const SITES = [
   {
     key: "decoder",
-    group: "llm",
+    group: "inference",
     label: "Decoder",
     href: "https://transformer-decoder-explained.vercel.app",
     title: "Transformer Decoder Explainer: how one forward pass works",
@@ -28,7 +29,7 @@ const SITES = [
   },
   {
     key: "inference",
-    group: "llm",
+    group: "inference",
     label: "Inference",
     href: "https://llm-inference-explained.vercel.app",
     title: "LLM Inference Explained: how real systems generate text",
@@ -36,7 +37,7 @@ const SITES = [
   },
   {
     key: "architectures",
-    group: "llm",
+    group: "inference",
     label: "Architectures",
     href: "https://llm-architectures-explained.vercel.app",
     title: "LLM Architectures Explained: how model designs differ",
@@ -44,7 +45,7 @@ const SITES = [
   },
   {
     key: "kernels",
-    group: "llm",
+    group: "inference",
     label: "Kernels",
     href: "https://gpu-kernels-explained.vercel.app",
     title: "GPU Kernels Explained: how a GPU executes the maths",
@@ -52,7 +53,7 @@ const SITES = [
   },
   {
     key: "numerics",
-    group: "llm",
+    group: "inference",
     label: "Numerics",
     href: "https://numerics-explained.vercel.app",
     title: "Numerics Explained: number formats and quantisation",
@@ -60,7 +61,7 @@ const SITES = [
   },
   {
     key: "silicon",
-    group: "llm",
+    group: "inference",
     label: "Silicon",
     href: "https://systolic-arrays-explained.vercel.app",
     title: "Systolic Arrays Explained: the silicon underneath",
@@ -68,20 +69,29 @@ const SITES = [
   },
   {
     key: "tradeoffs",
-    group: "llm",
+    group: "inference",
     label: "Trade-offs",
     href: "https://inference-tradeoffs-explained.vercel.app",
     title: "Inference Trade-offs Explained: which lever helps which metric",
     live: true,
   },
   {
+    key: "training",
+    group: "training",
+    label: "Training",
+    href: "https://transformer-decoder-explained.vercel.app/training",
+    title: "Transformer Decoder Explained, Part 2: how a decoder is trained",
+    live: false,
+  },
+  {
     key: "transit",
-    group: "llm",
+    group: "training",
     label: "Compute in transit",
     href: "https://compute-in-transit-results.vercel.app",
     title:
       "Compute in Transit: an investigation of computing on gradients in the network",
     live: true,
+    hideOn: ["decoder"],
   },
   {
     key: "harnesses",
@@ -114,7 +124,7 @@ const SITES = [
     href: "https://agent-orchestration-explained.vercel.app",
     title:
       "Agent Orchestration Explained: graphs, multi-agent patterns and durability",
-    live: false,
+    live: true,
   },
   {
     key: "evals",
@@ -135,12 +145,21 @@ const SITES = [
 ] as const;
 
 const GROUPS = [
-  { key: "llm", label: "LLM systems" },
+  { key: "inference", label: "Inference" },
+  { key: "training", label: "Training" },
   { key: "agents", label: "Agents" },
 ] as const;
 
 export type SiteKey = (typeof SITES)[number]["key"];
 type Site = (typeof SITES)[number];
+
+/** The entries of one group that are shown on the `current` site (`hideOn` filtered out). */
+function sitesIn(group: string, current: SiteKey): Site[] {
+  return SITES.filter((s) => {
+    const hideOn: readonly string[] = "hideOn" in s ? s.hideOn : [];
+    return s.group === group && !hideOn.includes(current);
+  });
+}
 
 const ITEM =
   "focus-ring rounded-md px-2.5 py-1 text-neutral-700 hover:text-neutral-950 dark:text-neutral-300 dark:hover:text-white";
@@ -195,7 +214,7 @@ function Row({
       data-site-group={group.key}
       className={className}
     >
-      {SITES.filter((s) => s.group === group.key).map((s, i) => (
+      {sitesIn(group.key, current).map((s, i) => (
         <span key={s.key} className="inline-flex items-center">
           {i > 0 && (
             <span aria-hidden className="text-neutral-400">
@@ -223,10 +242,18 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
         <input
           type="radio"
           name="site-switch-group"
-          id="site-switch-llm"
-          aria-label="Show the LLM systems sites"
-          defaultChecked={here.group === "llm"}
-          className="peer/llm sr-only"
+          id="site-switch-inference"
+          aria-label="Show the inference sites"
+          defaultChecked={here.group === "inference"}
+          className="peer/inference sr-only"
+        />
+        <input
+          type="radio"
+          name="site-switch-group"
+          id="site-switch-training"
+          aria-label="Show the training sites"
+          defaultChecked={here.group === "training"}
+          className="peer/training sr-only"
         />
         <input
           type="radio"
@@ -237,10 +264,16 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
           className="peer/agents sr-only"
         />
         <label
-          htmlFor="site-switch-llm"
-          className={`${TOGGLE} rounded-l-md border border-neutral-300 peer-checked/llm:bg-neutral-200 peer-checked/llm:font-medium peer-checked/llm:text-neutral-950 peer-focus-visible/llm:ring-2 peer-focus-visible/llm:ring-accent dark:border-neutral-700 dark:peer-checked/llm:bg-neutral-800 dark:peer-checked/llm:text-white`}
+          htmlFor="site-switch-inference"
+          className={`${TOGGLE} rounded-l-md border border-neutral-300 peer-checked/inference:bg-neutral-200 peer-checked/inference:font-medium peer-checked/inference:text-neutral-950 peer-focus-visible/inference:ring-2 peer-focus-visible/inference:ring-accent dark:border-neutral-700 dark:peer-checked/inference:bg-neutral-800 dark:peer-checked/inference:text-white`}
         >
-          LLM systems
+          Inference
+        </label>
+        <label
+          htmlFor="site-switch-training"
+          className={`${TOGGLE} -ml-2 border border-l-0 border-neutral-300 peer-checked/training:bg-neutral-200 peer-checked/training:font-medium peer-checked/training:text-neutral-950 peer-focus-visible/training:ring-2 peer-focus-visible/training:ring-accent dark:border-neutral-700 dark:peer-checked/training:bg-neutral-800 dark:peer-checked/training:text-white`}
+        >
+          Training
         </label>
         <label
           htmlFor="site-switch-agents"
@@ -251,15 +284,20 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
         <Row
           group={GROUPS[0]}
           current={current}
-          className={`${ROW} peer-checked/llm:inline-flex`}
+          className={`${ROW} peer-checked/inference:inline-flex`}
         />
         <Row
           group={GROUPS[1]}
           current={current}
+          className={`${ROW} peer-checked/training:inline-flex`}
+        />
+        <Row
+          group={GROUPS[2]}
+          current={current}
           className={`${ROW} peer-checked/agents:inline-flex`}
         />
       </div>
-      {/* below lg: one dropdown with both groups */}
+      {/* below lg: one dropdown with all three groups */}
       <details
         className="relative text-xs lg:hidden"
         data-site-switch="compact"
@@ -279,7 +317,7 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
               <p className="px-2.5 pb-1 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
                 {g.label}
               </p>
-              {SITES.filter((s) => s.group === g.key).map((s) => (
+              {sitesIn(g.key, current).map((s) => (
                 <Item key={s.key} s={s} current={current} block />
               ))}
             </nav>
