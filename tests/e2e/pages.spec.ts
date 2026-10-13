@@ -62,79 +62,172 @@ for (const scheme of ["light", "dark"] as const) {
   }
 }
 
-test("the site switch: one Site menu listing every group, at every width", async ({
+test("the site switch: four tracks, and the button and header say where you are", async ({
   page,
 }) => {
   const menu = page.locator("[data-site-switch='menu']");
   const panel = menu.locator("summary + div");
-  const training = menu.locator("nav[data-site-group='training']");
-  const inference = menu.locator("nav[data-site-group='inference']");
-  const agents = menu.locator("nav[data-site-group='agents']");
-  for (const width of [1280, 390]) {
+  const site = (key: string) => panel.locator(`[data-site-key='${key}']`);
+  const brand = page.locator("header [data-site-brand]");
+  for (const width of [1280, 1024, 390]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
-    // closed: one button naming this site
+    // closed: the button reads "<Track> › <Site>", and the header shows the same place
     await expect(menu).toBeVisible();
-    await expect(menu.locator("summary")).toContainText("Kernels");
+    await expect(menu.locator("summary")).toHaveText(/^Hardware\W+Kernels\W*$/);
+    await expect(brand).toHaveText(/^Hardware\W+Kernels\W*$/);
+    expect(await brand.locator("[data-site-place]").textContent()).toBe(
+      await menu.locator("summary [data-site-place]").textContent(),
+    );
+    if (width === 1280)
+      expect((await brand.boundingBox())!.height).toBeLessThan(30);
     await expect(panel).toBeHidden();
-    // one click opens every group, in the order Training, Inference, Agents
+    // one click opens every track, in the order Foundations, Hardware, Inference, Agents
     await menu.locator("summary").click();
     await expect(panel).toBeVisible();
-    await expect(menu.locator("nav > p")).toHaveText([
-      "Training",
+    await expect(menu.locator("nav > p:first-child")).toHaveText([
+      "Foundations",
+      "Hardware",
       "Inference",
       "Agents",
     ]);
-    // this site is highlighted
-    await expect(
-      menu.getByRole("link", { name: "Kernels", exact: true }),
-    ).toHaveAttribute("aria-current", "true");
-    await expect(
-      training.getByRole("link", { name: "Training", exact: true }),
-    ).toHaveAttribute(
-      "href",
-      "https://transformer-training-explained.vercel.app",
-    );
-    await expect(panel.getByText("Compute in transit")).toHaveCount(0);
-    for (const [name, href] of [
-      ["Decoder", "https://transformer-decoder-explained.vercel.app"],
-      ["Inference", "https://llm-inference-explained.vercel.app"],
-      ["Architectures", "https://llm-architectures-explained.vercel.app"],
-      ["Kernels", "https://gpu-kernels-explained.vercel.app"],
-      ["Numerics", "https://numerics-explained.vercel.app"],
-      ["Silicon", "https://systolic-arrays-explained.vercel.app"],
-      ["Trade-offs", "https://inference-tradeoffs-explained.vercel.app"],
-    ] as const)
-      await expect(
-        inference.getByRole("link", { name, exact: true }),
-      ).toHaveAttribute("href", href);
-    for (const [name, href] of [
-      ["Harnesses", "https://agent-harnesses-explained.vercel.app"],
-      ["Protocols", "https://agent-protocols-explained.vercel.app"],
-      ["Context", "https://agent-context-explained.vercel.app"],
-      ["Orchestration", "https://agent-orchestration-explained.vercel.app"],
-    ] as const)
-      await expect(
-        agents.getByRole("link", { name, exact: true }),
-      ).toHaveAttribute("href", href);
-    for (const soon of ["Evals", "Security"]) {
-      await expect(agents.getByText(soon)).toBeVisible();
-      await expect(agents.getByRole("link", { name: soon })).toHaveCount(0);
+    await expect(menu.locator("nav > p:nth-child(2)")).toHaveText([
+      "One small model, end to end",
+      "The machines underneath, chip to rack",
+      "Serving models at scale",
+      "Building on models",
+    ]);
+    // every site, in order, with its name, its one-line description and its address
+    const SITES = [
+      [
+        "decoder",
+        "Decoder",
+        "How it runs, one forward pass",
+        "https://transformer-decoder-explained.vercel.app",
+      ],
+      [
+        "training",
+        "Training",
+        "How it learns, from one step to many GPUs",
+        "https://transformer-training-explained.vercel.app",
+      ],
+      [
+        "kernels",
+        "Kernels",
+        "How a GPU executes the maths",
+        "https://gpu-kernels-explained.vercel.app",
+      ],
+      [
+        "silicon",
+        "Silicon",
+        "Inside a matrix engine",
+        "https://systolic-arrays-explained.vercel.app",
+      ],
+      ["racks", "Racks", "GPUs, networks, power, cooling at scale", ""],
+      [
+        "inference",
+        "Serving",
+        "How real systems generate text",
+        "https://llm-inference-explained.vercel.app",
+      ],
+      [
+        "architectures",
+        "Architectures",
+        "How model designs differ",
+        "https://llm-architectures-explained.vercel.app",
+      ],
+      [
+        "numerics",
+        "Numerics",
+        "Number formats and quantisation",
+        "https://numerics-explained.vercel.app",
+      ],
+      [
+        "tradeoffs",
+        "Trade-offs",
+        "Which lever helps which metric",
+        "https://inference-tradeoffs-explained.vercel.app",
+      ],
+      [
+        "harnesses",
+        "Harnesses",
+        "The loop between a model and the world",
+        "https://agent-harnesses-explained.vercel.app",
+      ],
+      [
+        "protocols",
+        "Protocols",
+        "MCP, transports, auth and A2A",
+        "https://agent-protocols-explained.vercel.app",
+      ],
+      [
+        "context",
+        "Context",
+        "Retrieval, memory and context engineering",
+        "https://agent-context-explained.vercel.app",
+      ],
+      [
+        "orchestration",
+        "Orchestration",
+        "Graphs, multi-agent patterns, durability",
+        "https://agent-orchestration-explained.vercel.app",
+      ],
+      ["evals", "Evals", "Measuring agents", ""],
+      ["security", "Security", "Threats and defences", ""],
+    ] as const;
+    expect(
+      await panel
+        .locator("[data-site-key]")
+        .evaluateAll((els) => els.map((e) => e.getAttribute("data-site-key"))),
+    ).toEqual(SITES.map((s) => s[0]));
+    for (const [key, name, blurb, href] of SITES) {
+      await expect(site(key)).toContainText(name);
+      await expect(site(key)).toContainText(blurb);
+      if (href) await expect(site(key)).toHaveAttribute("href", href);
+      // not live yet: shown, marked "(soon)", not a link
+      else {
+        await expect(site(key)).toContainText("(soon)");
+        await expect(site(key)).not.toHaveAttribute("href", /./);
+      }
     }
+    // each track holds its own sites
+    for (const [group, n] of [
+      ["foundations", 2],
+      ["hardware", 3],
+      ["inference", 4],
+      ["agents", 6],
+    ] as const)
+      await expect(
+        menu.locator(`nav[data-site-group='${group}'] [data-site-key]`),
+      ).toHaveCount(n);
+    // no site is named after a track
+    await expect(
+      panel.getByRole("link", {
+        name: /^(Foundations|Hardware|Inference|Agents)\b/,
+      }),
+    ).toHaveCount(0);
+    // this site is highlighted
+    await expect(site("kernels")).toHaveAttribute("aria-current", "true");
+    await expect(panel.locator("[aria-current]")).toHaveCount(1);
+    await expect(panel.getByText("Compute in transit")).toHaveCount(0);
     // every entry is a 44 px touch target
-    const decoder = await inference
-      .getByRole("link", { name: "Decoder", exact: true })
-      .boundingBox();
-    expect(decoder!.height).toBeGreaterThanOrEqual(44);
-    // the groups sit side by side on desktop and stack on a phone
-    const t = (await training.boundingBox())!;
-    const a = (await agents.boundingBox())!;
-    if (width >= 1024) expect(Math.round(a.y)).toBe(Math.round(t.y));
-    else expect(a.y).toBeGreaterThan(t.y);
+    expect(
+      (await site("decoder").boundingBox())!.height,
+    ).toBeGreaterThanOrEqual(44);
+    // the tracks sit side by side on desktop and stack on a phone
+    const f = (await menu
+      .locator("nav[data-site-group='foundations']")
+      .boundingBox())!;
+    const a = (await menu
+      .locator("nav[data-site-group='agents']")
+      .boundingBox())!;
+    if (width >= 1024) expect(Math.round(a.y)).toBe(Math.round(f.y));
+    else expect(a.y).toBeGreaterThan(f.y);
     // the open panel stays on screen and the page never scrolls sideways
     const p = (await panel.boundingBox())!;
     expect(p.x).toBeGreaterThanOrEqual(0);
     expect(p.x + p.width).toBeLessThanOrEqual(width);
+    expect(p.y + p.height).toBeLessThanOrEqual(800);
     const overflow = await page.evaluate(
       () =>
         document.scrollingElement!.scrollWidth -
@@ -142,9 +235,12 @@ test("the site switch: one Site menu listing every group, at every width", async
     );
     expect(overflow).toBeLessThanOrEqual(0);
   }
-  // keyboard: Enter on the button opens the menu (a native <details>, no JavaScript)
+  // keyboard: Enter on the button opens the menu (a native <details>, no JavaScript),
+  // and Tab goes on to the first site
   await page.goto("/");
   await menu.locator("summary").focus();
   await page.keyboard.press("Enter");
   await expect(panel).toBeVisible();
+  await page.keyboard.press("Tab");
+  await expect(site("decoder")).toBeFocused();
 });

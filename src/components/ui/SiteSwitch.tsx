@@ -1,56 +1,84 @@
 /**
- * Cross-site navigation between the companion sites, in three groups:
+ * Cross-site navigation between the companion sites, in four tracks:
  *
- *   Training:  Training
- *   Inference: Decoder · Inference · Architectures · Kernels · Numerics · Silicon · Trade-offs
- *   Agents:    Harnesses · Protocols · Context · Orchestration · Evals · Security
+ *   Foundations: Decoder · Training
+ *   Hardware:    Kernels · Silicon · Racks
+ *   Inference:   Serving · Architectures · Numerics · Trade-offs
+ *   Agents:      Harnesses · Protocols · Context · Orchestration · Evals · Security
+ *
+ * One name per level, never reused: track names, site names and each site's
+ * own chapter names are all distinct.
  *
  * The same file, byte for byte, sits in every site's header; only the `current` prop differs.
  *
- * One "Site: <this site> ▾" button at every width. It is a native <details>, so it works with
- * no JavaScript: one click opens a panel listing every group under its heading (side by side
- * from the `lg` breakpoint up, stacked below it), and one click on a site goes there. The
- * current site is highlighted. The panel is placed against the window's edge (16 px in from both
- * sides on a phone, the right side from `lg`), not against the button, so it stays on screen
- * wherever a site's header puts the button.
+ * One "<Track> › <Site> ▾" button at every width, so the button itself says where the reader
+ * is. It is a native <details>, so it works with no JavaScript: one click opens a panel listing
+ * every track under its heading and tagline (side by side from the `lg` breakpoint up, stacked
+ * below it), each site with a one-line description; one click on a site goes there. The current
+ * site is highlighted. The panel is placed against the window's edge (16 px in from both sides on
+ * a phone, the right side from `lg`), not against the button, so it stays on screen wherever a
+ * site's header puts the button.
+ *
+ * `placeOf(current)` gives a site's place (track and site name) for its header, and `SitePlace`
+ * renders it, so a header never drifts from the menu.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
- * launches (on every site). An `unlisted` entry is never shown in the switch; it is kept so
- * that its site can still pass its own key as `current` (the Compute in Transit results site
- * names itself on the button). Server Component.
+ * launches (on every site). An `unlisted` entry is never shown in the switch and belongs to no
+ * track; it is kept so that its site can still pass its own key as `current` (the Compute in
+ * Transit results site names itself on the button). Server Component.
  */
 
 const SITES = [
   {
-    key: "training",
-    group: "training",
-    label: "Training",
-    href: "https://transformer-training-explained.vercel.app",
-    title: "Transformer Decoder Explained, Part 2: how a decoder is trained",
-    live: true,
-  },
-  {
-    key: "transit",
-    group: "training",
-    label: "Compute in transit",
-    href: "https://compute-in-transit-results.vercel.app",
-    title:
-      "Compute in Transit: an investigation of computing on gradients in the network",
-    live: true,
-    unlisted: true,
-  },
-  {
     key: "decoder",
-    group: "inference",
+    group: "foundations",
     label: "Decoder",
+    blurb: "How it runs, one forward pass",
     href: "https://transformer-decoder-explained.vercel.app",
-    title: "Transformer Decoder Explainer: how one forward pass works",
+    title: "Transformer Decoder Explained: how one forward pass works",
     live: true,
+  },
+  {
+    key: "training",
+    group: "foundations",
+    label: "Training",
+    blurb: "How it learns, from one step to many GPUs",
+    href: "https://transformer-training-explained.vercel.app",
+    title: "Transformer Training Explained: how the same decoder is trained",
+    live: true,
+  },
+  {
+    key: "kernels",
+    group: "hardware",
+    label: "Kernels",
+    blurb: "How a GPU executes the maths",
+    href: "https://gpu-kernels-explained.vercel.app",
+    title: "GPU Kernels Explained: how a GPU executes the maths",
+    live: true,
+  },
+  {
+    key: "silicon",
+    group: "hardware",
+    label: "Silicon",
+    blurb: "Inside a matrix engine",
+    href: "https://systolic-arrays-explained.vercel.app",
+    title: "Systolic Arrays Explained: the silicon underneath",
+    live: true,
+  },
+  {
+    key: "racks",
+    group: "hardware",
+    label: "Racks",
+    blurb: "GPUs, networks, power, cooling at scale",
+    href: "https://ai-racks-explained.vercel.app",
+    title: "AI Racks Explained: GPUs, networks, power and cooling at scale",
+    live: false,
   },
   {
     key: "inference",
     group: "inference",
-    label: "Inference",
+    label: "Serving",
+    blurb: "How real systems generate text",
     href: "https://llm-inference-explained.vercel.app",
     title: "LLM Inference Explained: how real systems generate text",
     live: true,
@@ -59,38 +87,25 @@ const SITES = [
     key: "architectures",
     group: "inference",
     label: "Architectures",
+    blurb: "How model designs differ",
     href: "https://llm-architectures-explained.vercel.app",
     title: "LLM Architectures Explained: how model designs differ",
-    live: true,
-  },
-  {
-    key: "kernels",
-    group: "inference",
-    label: "Kernels",
-    href: "https://gpu-kernels-explained.vercel.app",
-    title: "GPU Kernels Explained: how a GPU executes the maths",
     live: true,
   },
   {
     key: "numerics",
     group: "inference",
     label: "Numerics",
+    blurb: "Number formats and quantisation",
     href: "https://numerics-explained.vercel.app",
     title: "Numerics Explained: number formats and quantisation",
-    live: true,
-  },
-  {
-    key: "silicon",
-    group: "inference",
-    label: "Silicon",
-    href: "https://systolic-arrays-explained.vercel.app",
-    title: "Systolic Arrays Explained: the silicon underneath",
     live: true,
   },
   {
     key: "tradeoffs",
     group: "inference",
     label: "Trade-offs",
+    blurb: "Which lever helps which metric",
     href: "https://inference-tradeoffs-explained.vercel.app",
     title: "Inference Trade-offs Explained: which lever helps which metric",
     live: true,
@@ -99,6 +114,7 @@ const SITES = [
     key: "harnesses",
     group: "agents",
     label: "Harnesses",
+    blurb: "The loop between a model and the world",
     href: "https://agent-harnesses-explained.vercel.app",
     title: "Agent Harnesses Explained: the loop between a model and the world",
     live: true,
@@ -107,6 +123,7 @@ const SITES = [
     key: "protocols",
     group: "agents",
     label: "Protocols",
+    blurb: "MCP, transports, auth and A2A",
     href: "https://agent-protocols-explained.vercel.app",
     title: "Agent Protocols Explained: MCP, transports, auth and A2A",
     live: true,
@@ -115,6 +132,7 @@ const SITES = [
     key: "context",
     group: "agents",
     label: "Context",
+    blurb: "Retrieval, memory and context engineering",
     href: "https://agent-context-explained.vercel.app",
     title: "Agent Context Explained: retrieval, memory and context engineering",
     live: true,
@@ -123,6 +141,7 @@ const SITES = [
     key: "orchestration",
     group: "agents",
     label: "Orchestration",
+    blurb: "Graphs, multi-agent patterns, durability",
     href: "https://agent-orchestration-explained.vercel.app",
     title:
       "Agent Orchestration Explained: graphs, multi-agent patterns and durability",
@@ -132,6 +151,7 @@ const SITES = [
     key: "evals",
     group: "agents",
     label: "Evals",
+    blurb: "Measuring agents",
     href: "https://agent-evals-explained.vercel.app",
     title: "Agent Evals Explained: measuring agents",
     live: false,
@@ -140,20 +160,72 @@ const SITES = [
     key: "security",
     group: "agents",
     label: "Security",
+    blurb: "Threats and defences",
     href: "https://agent-security-explained.vercel.app",
     title: "Agent Security Explained: threats and defences",
     live: false,
   },
+  {
+    key: "transit",
+    group: "none",
+    label: "Compute in transit",
+    blurb: "Computing on gradients in the network",
+    href: "https://compute-in-transit-results.vercel.app",
+    title:
+      "Compute in Transit: an investigation of computing on gradients in the network",
+    live: true,
+    unlisted: true,
+  },
 ] as const;
 
 const GROUPS = [
-  { key: "training", label: "Training" },
-  { key: "inference", label: "Inference" },
-  { key: "agents", label: "Agents" },
+  {
+    key: "foundations",
+    label: "Foundations",
+    blurb: "One small model, end to end",
+  },
+  {
+    key: "hardware",
+    label: "Hardware",
+    blurb: "The machines underneath, chip to rack",
+  },
+  { key: "inference", label: "Inference", blurb: "Serving models at scale" },
+  { key: "agents", label: "Agents", blurb: "Building on models" },
 ] as const;
 
 export type SiteKey = (typeof SITES)[number]["key"];
 type Site = (typeof SITES)[number];
+
+/** Where a site sits: its track (none for an unlisted site) and its name. */
+export type Place = { track: string | null; site: string; title: string };
+
+/** The place of `current`, for its header: e.g. { track: "Inference", site: "Serving" }. */
+export function placeOf(current: SiteKey): Place {
+  const s = SITES.find((x) => x.key === current) ?? SITES[0];
+  const g = GROUPS.find((x) => x.key === s.group);
+  return { track: g ? g.label : null, site: s.label, title: s.title };
+}
+
+/** "Track › Site" as inline text (the track muted), the same on the button and in a header. */
+export function SitePlace({ current }: { current: SiteKey }): JSX.Element {
+  const p = placeOf(current);
+  return (
+    <span data-site-place={current}>
+      {p.track && (
+        <>
+          <span className="text-neutral-500 dark:text-neutral-400">
+            {p.track}
+          </span>
+          <span aria-hidden className="px-1 text-neutral-400">
+            ›
+          </span>
+          <span className="sr-only">: </span>
+        </>
+      )}
+      <span className="font-medium">{p.site}</span>
+    </span>
+  );
+}
 
 /** The entries of one group that are shown in the switch (`unlisted` ones left out). */
 function sitesIn(group: string): Site[] {
@@ -161,42 +233,53 @@ function sitesIn(group: string): Site[] {
 }
 
 const ITEM =
-  "focus-ring flex min-h-11 items-center rounded-md px-2.5 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white";
+  "focus-ring flex min-h-11 flex-col justify-center rounded-md px-2.5 py-1 text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-white";
 const CURRENT =
-  "focus-ring flex min-h-11 items-center rounded-md bg-accent px-2.5 font-medium text-accent-fg";
+  "focus-ring flex min-h-11 flex-col justify-center rounded-md bg-accent px-2.5 py-1 text-accent-fg";
 const SOON =
-  "flex min-h-11 cursor-default items-center px-2.5 text-neutral-500 dark:text-neutral-400";
+  "flex min-h-11 cursor-default flex-col justify-center px-2.5 py-1 text-neutral-500 dark:text-neutral-400";
+const BLURB = "text-[0.7rem] leading-snug";
+const MUTED = "text-neutral-600 dark:text-neutral-400";
 
 function Item({ s, current }: { s: Site; current: SiteKey }): JSX.Element {
   if (!s.live)
     return (
-      <span title={s.title} aria-disabled="true" className={SOON}>
-        {s.label}
-        <span className="ml-1 text-[0.65rem]">(soon)</span>
+      <span
+        title={s.title}
+        aria-disabled="true"
+        data-site-key={s.key}
+        className={SOON}
+      >
+        <span>
+          {s.label}
+          <span className="ml-1 text-[0.65rem]">(soon)</span>
+        </span>
+        <span className={BLURB}>{s.blurb}</span>
       </span>
     );
+  const here = s.key === current;
   return (
     <a
       href={s.href}
       title={s.title}
-      aria-current={s.key === current ? "true" : undefined}
-      className={s.key === current ? CURRENT : ITEM}
+      data-site-key={s.key}
+      aria-current={here ? "true" : undefined}
+      className={here ? CURRENT : ITEM}
     >
-      {s.label}
+      <span className="font-medium">{s.label}</span>
+      <span className={`${BLURB} ${here ? "" : MUTED}`}>{s.blurb}</span>
     </a>
   );
 }
 
 export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
-  const here = SITES.find((s) => s.key === current) ?? SITES[0];
   return (
     <details className="relative text-xs" data-site-switch="menu">
-      <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1 rounded-md border border-neutral-300 px-3 dark:border-neutral-700">
-        <span className="text-neutral-500 dark:text-neutral-400">Site:</span>
-        <span className="font-medium">{here.label}</span>
+      <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center gap-1 whitespace-nowrap rounded-md border border-neutral-300 px-3 dark:border-neutral-700">
+        <SitePlace current={current} />
         <span aria-hidden>▾</span>
       </summary>
-      <div className="fixed left-4 right-4 z-20 mt-1 flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg lg:left-auto lg:max-h-none lg:w-[30rem] lg:flex-row lg:gap-2 lg:p-2 dark:border-neutral-700 dark:bg-neutral-900">
+      <div className="fixed left-4 right-4 z-20 mt-1 flex max-h-[70vh] flex-col gap-1 overflow-y-auto rounded-md border border-neutral-300 bg-white p-1 shadow-lg lg:left-auto lg:max-h-[80vh] lg:w-[60rem] lg:max-w-[calc(100vw-2rem)] lg:flex-row lg:gap-2 lg:p-2 dark:border-neutral-700 dark:bg-neutral-900">
         {GROUPS.map((g) => (
           <nav
             key={g.key}
@@ -204,8 +287,11 @@ export function SiteSwitch({ current }: { current: SiteKey }): JSX.Element {
             data-site-group={g.key}
             className="flex flex-col lg:flex-1"
           >
-            <p className="px-2.5 pb-1 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
+            <p className="px-2.5 pt-2 font-mono text-[0.65rem] uppercase tracking-widest text-neutral-500 dark:text-neutral-400">
               {g.label}
+            </p>
+            <p className="px-2.5 pb-1 text-[0.7rem] italic text-neutral-500 dark:text-neutral-400">
+              {g.blurb}
             </p>
             {sitesIn(g.key).map((s) => (
               <Item key={s.key} s={s} current={current} />
