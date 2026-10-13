@@ -177,7 +177,12 @@ test("the site switch: four tracks, and the button and header say where you are"
         "Graphs, multi-agent patterns, durability",
         "https://agent-orchestration-explained.vercel.app",
       ],
-      ["evals", "Evals", "Measuring agents", ""],
+      [
+        "evals",
+        "Evals",
+        "Measuring agents",
+        "https://agent-evals-explained.vercel.app",
+      ],
       ["security", "Security", "Threats and defences", ""],
     ] as const;
     expect(
