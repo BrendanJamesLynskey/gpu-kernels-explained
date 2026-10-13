@@ -36,6 +36,7 @@ const SWITCH = [
   'href="https://agent-protocols-explained.vercel.app"',
   'href="https://agent-context-explained.vercel.app"',
   'href="https://agent-orchestration-explained.vercel.app"',
+  'href="https://agent-evals-explained.vercel.app"',
   'data-site-group="foundations"',
   'data-site-group="hardware"',
   'href="https://ai-racks-explained.vercel.app"',

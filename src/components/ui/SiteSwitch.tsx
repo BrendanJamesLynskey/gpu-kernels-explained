@@ -154,7 +154,7 @@ const SITES = [
     blurb: "Measuring agents",
     href: "https://agent-evals-explained.vercel.app",
     title: "Agent Evals Explained: measuring agents",
-    live: false,
+    live: true,
   },
   {
     key: "security",
