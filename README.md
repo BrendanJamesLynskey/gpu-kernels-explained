@@ -17,8 +17,8 @@ shows how the models differ, and this site is the layer underneath: the
 kernels. They share one design system and link to each other from the
 header, in four tracks, and the
 header always shows where you are ("Track › Site"): "Foundations" (Decoder ·
-Training: one small model, end to end), "Hardware" (Kernels · Silicon · Racks,
-soon: the machines underneath, chip to rack), "Inference" (Serving ·
+Training: one small model, end to end), "Hardware" (Kernels · Silicon · Racks:
+the machines underneath, chip to rack), "Inference" (Serving ·
 Architectures · Numerics · Trade-offs; Serving is LLM Inference Explained) and
 "Agents", which starts with
 [Agent Harnesses Explained](https://agent-harnesses-explained.vercel.app/)

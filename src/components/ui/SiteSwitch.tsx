@@ -72,7 +72,7 @@ const SITES = [
     blurb: "GPUs, networks, power, cooling at scale",
     href: "https://ai-racks-explained.vercel.app",
     title: "AI Racks Explained: GPUs, networks, power and cooling at scale",
-    live: false,
+    live: true,
   },
   {
     key: "inference",
