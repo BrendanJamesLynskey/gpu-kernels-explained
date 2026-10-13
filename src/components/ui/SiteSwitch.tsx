@@ -25,7 +25,7 @@ const SITES = [
     key: "training",
     group: "training",
     label: "Training",
-    href: "https://transformer-decoder-explained.vercel.app/training",
+    href: "https://transformer-training-explained.vercel.app",
     title: "Transformer Decoder Explained, Part 2: how a decoder is trained",
     live: true,
   },
