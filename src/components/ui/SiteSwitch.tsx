@@ -19,8 +19,10 @@
  * a phone, the right side from `lg`), not against the button, so it stays on screen wherever a
  * site's header puts the button.
  *
- * `placeOf(current)` gives a site's place (track and site name) for its header, and `SitePlace`
- * renders it, so a header never drifts from the menu.
+ * `placeOf(current)` gives a site's place (track and site name) and `SitePlace` renders it on the
+ * button; `nameOf(current)` gives the site's own name ("Agent Security Explained", its title up to
+ * the colon) for its header's brand, so the header names the site once and the button says where
+ * it sits, and neither drifts from the menu.
  *
  * A site that is not live yet is shown but not linked, marked "(soon)"; flip `live` when it
  * launches (on every site). An `unlisted` entry is never shown in the switch and belongs to no
@@ -206,7 +208,14 @@ export function placeOf(current: SiteKey): Place {
   return { track: g ? g.label : null, site: s.label, title: s.title };
 }
 
-/** "Track › Site" as inline text (the track muted), the same on the button and in a header. */
+/** A site's own name, for its header's brand: its title up to the colon, e.g. "Agent Security Explained". */
+export function nameOf(current: SiteKey): string {
+  const title = placeOf(current).title;
+  const colon = title.indexOf(":");
+  return colon < 0 ? title : title.slice(0, colon);
+}
+
+/** "Track › Site" as inline text (the track muted), as the button shows it. */
 export function SitePlace({ current }: { current: SiteKey }): JSX.Element {
   const p = placeOf(current);
   return (
