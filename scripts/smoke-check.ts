@@ -24,8 +24,7 @@ import { SECTIONS } from "@/lib/mdx/sections";
 
 /** The author credit: the last line of the About page (brief 35). */
 const CREDIT = [
-  'data-author-credit="true"',
-  "Written and built by",
+  'data-author-credit="true">Built by',
   'href="https://github.com/BrendanJamesLynskey">Brendan Lynskey</a>',
 ];
 
