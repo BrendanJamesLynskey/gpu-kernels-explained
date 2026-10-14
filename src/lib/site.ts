@@ -18,6 +18,12 @@ export const TRADEOFFS_URL = "https://inference-tradeoffs-explained.vercel.app";
 export const GITHUB_URL =
   "https://github.com/BrendanJamesLynskey/gpu-kernels-explained";
 
+/** The author, credited in one quiet line at the foot of the About page. */
+export const AUTHOR = {
+  name: "Brendan Lynskey",
+  url: "https://github.com/BrendanJamesLynskey",
+} as const;
+
 /** The slide series each chapter links into ("go deeper"). */
 export const NVIDIA_GPU_HUB =
   "https://brendanjameslynskey.github.io/LLM_Hub_NVIDIA_GPUs/";

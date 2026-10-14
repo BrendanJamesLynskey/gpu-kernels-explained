@@ -22,6 +22,13 @@ import { derived, preset } from "@/lib/gpu/model";
 import { formatValue, lookup } from "@/lib/gpu/values";
 import { SECTIONS } from "@/lib/mdx/sections";
 
+/** The author credit: the last line of the About page (brief 35). */
+const CREDIT = [
+  'data-author-credit="true"',
+  "Written and built by",
+  'href="https://github.com/BrendanJamesLynskey">Brendan Lynskey</a>',
+];
+
 type Result = { path: string; ok: boolean; detail: string };
 
 const headers: Record<string, string> = process.env.VERCEL_BYPASS
@@ -85,7 +92,7 @@ async function main(): Promise<void> {
       fmtRate(a100.bw.smem),
       fmtRate(h100.bw.l2),
     ]),
-    checkPage(base, "/about", ["The execution model"]),
+    checkPage(base, "/about", [...CREDIT, "The execution model"]),
     checkPage(
       base,
       "/learn",
