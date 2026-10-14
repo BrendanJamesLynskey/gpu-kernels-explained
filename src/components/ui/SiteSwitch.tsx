@@ -163,7 +163,7 @@ const SITES = [
     blurb: "Threats and defences",
     href: "https://agent-security-explained.vercel.app",
     title: "Agent Security Explained: threats and defences",
-    live: false,
+    live: true,
   },
   {
     key: "transit",

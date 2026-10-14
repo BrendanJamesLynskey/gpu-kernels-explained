@@ -183,7 +183,12 @@ test("the site switch: four tracks, and the button and header say where you are"
         "Measuring agents",
         "https://agent-evals-explained.vercel.app",
       ],
-      ["security", "Security", "Threats and defences", ""],
+      [
+        "security",
+        "Security",
+        "Threats and defences",
+        "https://agent-security-explained.vercel.app",
+      ],
     ] as const;
     expect(
       await panel
