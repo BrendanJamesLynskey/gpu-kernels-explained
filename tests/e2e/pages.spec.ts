@@ -264,7 +264,7 @@ test("the about page ends with the author credit", async ({ page }) => {
   await page.goto("/about");
   const credit = page.locator("main > :last-child");
   await expect(credit).toHaveAttribute("data-author-credit", "true");
-  await expect(credit).toHaveText("Written and built by Brendan Lynskey");
+  await expect(credit).toHaveText("Built by Brendan Lynskey");
   const link = credit.getByRole("link", { name: "Brendan Lynskey" });
   await expect(link).toHaveAttribute(
     "href",
