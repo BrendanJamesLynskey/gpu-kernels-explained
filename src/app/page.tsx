@@ -2,14 +2,6 @@ import Link from "next/link";
 
 import { BandwidthLadder } from "@/components/viz/BandwidthLadder";
 import { SECTIONS } from "@/lib/mdx/sections";
-import {
-  ARCHITECTURES_URL,
-  DECODER_URL,
-  INFERENCE_URL,
-  NUMERICS_URL,
-  SILICON_URL,
-  TRADEOFFS_URL,
-} from "@/lib/site";
 import { formatValue, lookup } from "@/lib/gpu/values";
 
 /**
@@ -85,50 +77,114 @@ export default function HomePage(): JSX.Element {
         .
       </p>
       <p className="mt-12 text-sm text-neutral-600 dark:text-neutral-400">
-        Part of a family of companion sites: the{" "}
+        Part of a family of sixteen companion sites in four tracks, all in the
+        site menu above: Foundations (
         <a
-          href={DECODER_URL}
+          href="https://transformer-decoder-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          Transformer Decoder Explainer
-        </a>{" "}
-        (one forward pass),{" "}
+          Decoder
+        </a>
+        ,{" "}
         <a
-          href={INFERENCE_URL}
+          href="https://transformer-training-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          LLM Inference Explained
-        </a>{" "}
-        (serving it),{" "}
+          Training
+        </a>
+        ), Hardware (<strong className="font-medium">Kernels</strong>,{" "}
         <a
-          href={ARCHITECTURES_URL}
+          href="https://systolic-arrays-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          LLM Architectures Explained
-        </a>{" "}
-        (how the models differ),{" "}
+          Systolic
+        </a>
+        ,{" "}
         <a
-          href={NUMERICS_URL}
+          href="https://ai-accelerators-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          Numerics Explained
-        </a>{" "}
-        (the numbers themselves),{" "}
+          Accelerators
+        </a>
+        ,{" "}
         <a
-          href={SILICON_URL}
+          href="https://ai-racks-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          Systolic Arrays Explained
-        </a>{" "}
-        (the matrix hardware of TPUs) and{" "}
+          Racks
+        </a>
+        ), Inference (
         <a
-          href={TRADEOFFS_URL}
+          href="https://llm-inference-explained.vercel.app"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
         >
-          Inference Trade-offs Explained
-        </a>{" "}
-        (which serving lever helps which metric). This site is the layer
-        underneath: the kernels. How it was built, and how to check it:{" "}
+          Serving
+        </a>
+        ,{" "}
+        <a
+          href="https://llm-architectures-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Architectures
+        </a>
+        ,{" "}
+        <a
+          href="https://numerics-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Numerics
+        </a>
+        ,{" "}
+        <a
+          href="https://inference-tradeoffs-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Trade-offs
+        </a>
+        ) and Agents (
+        <a
+          href="https://agent-harnesses-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Harnesses
+        </a>
+        ,{" "}
+        <a
+          href="https://agent-protocols-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Protocols
+        </a>
+        ,{" "}
+        <a
+          href="https://agent-context-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Context
+        </a>
+        ,{" "}
+        <a
+          href="https://agent-orchestration-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Orchestration
+        </a>
+        ,{" "}
+        <a
+          href="https://agent-evals-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Evals
+        </a>
+        ,{" "}
+        <a
+          href="https://agent-security-explained.vercel.app"
+          className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+        >
+          Security
+        </a>
+        ). This site is the layer underneath: the kernels. How it was built, and
+        how to check it:{" "}
         <Link
           href="/about"
           className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
