@@ -2,7 +2,7 @@
  * Cross-site navigation between the companion sites, in four tracks:
  *
  *   Foundations: Decoder · Training
- *   Hardware:    Kernels · Silicon · Racks
+ *   Hardware:    Kernels · Systolic · Accelerators · Racks
  *   Inference:   Serving · Architectures · Numerics · Trade-offs
  *   Agents:      Harnesses · Protocols · Context · Orchestration · Evals · Security
  *
@@ -61,10 +61,19 @@ const SITES = [
   {
     key: "silicon",
     group: "hardware",
-    label: "Silicon",
+    label: "Systolic",
     blurb: "Inside a matrix engine",
     href: "https://systolic-arrays-explained.vercel.app",
-    title: "Systolic Arrays Explained: the silicon underneath",
+    title: "Systolic Arrays Explained: inside a matrix engine",
+    live: true,
+  },
+  {
+    key: "accelerators",
+    group: "hardware",
+    label: "Accelerators",
+    blurb: "The families of AI chips",
+    href: "https://ai-accelerators-explained.vercel.app",
+    title: "AI Accelerators Explained: the families of AI silicon",
     live: true,
   },
   {
