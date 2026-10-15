@@ -119,9 +119,15 @@ test("the site switch: four tracks, and the brand names the site and the button 
       ],
       [
         "silicon",
-        "Silicon",
+        "Systolic",
         "Inside a matrix engine",
         "https://systolic-arrays-explained.vercel.app",
+      ],
+      [
+        "accelerators",
+        "Accelerators",
+        "The families of AI chips",
+        "https://ai-accelerators-explained.vercel.app",
       ],
       [
         "racks",
@@ -208,7 +214,7 @@ test("the site switch: four tracks, and the brand names the site and the button 
     // each track holds its own sites
     for (const [group, n] of [
       ["foundations", 2],
-      ["hardware", 3],
+      ["hardware", 4],
       ["inference", 4],
       ["agents", 6],
     ] as const)
