@@ -22,6 +22,8 @@ export type Share = {
   color: string;
   url: string;
   description: string;
+  /** The site's card (the opengraph-image route); a page whose segment has its own card overrides it. */
+  image?: string;
 };
 
 export const SHARE: Share = {
@@ -36,11 +38,16 @@ export const SHARE: Share = {
     "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, and quantised kernels, each animated by a tested execution model.",
 };
 
-/** `m` plus Open Graph and Twitter tags for the page at `path` (titled as `m` titles it). */
+/**
+ * `m` plus Open Graph and Twitter tags for the page at `path` (titled as `m` titles it). A page
+ * whose segment draws its own card (a chapter) passes `ownCard`, so that card is used instead of
+ * the site's.
+ */
 export function withShare<M extends Metadata>(
   path: string,
   m: M,
   share: Share = SHARE,
+  ownCard = false,
 ): M & Pick<Metadata, "openGraph" | "twitter"> {
   const t = m.title;
   const own =
@@ -55,6 +62,9 @@ export function withShare<M extends Metadata>(
       : (own ?? share.name);
   const description =
     typeof m.description === "string" ? m.description : share.description;
+  // a page's own openGraph replaces its parent's, card included, so name the site's card here
+  const card = share.image ?? "/opengraph-image";
+  const alt = `${share.name}: ${share.claim}`;
   return {
     ...m,
     openGraph: {
@@ -64,7 +74,25 @@ export function withShare<M extends Metadata>(
       siteName: share.name,
       type: path === "/" ? "website" : "article",
       locale: "en_GB",
+      ...(ownCard
+        ? {}
+        : {
+            images: [
+              { url: card, width: 1200, height: 630, alt, type: "image/png" },
+            ],
+          }),
     },
-    twitter: { card: "summary_large_image", title, description },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      ...(ownCard
+        ? {}
+        : {
+            images: [
+              { url: card.replace(/opengraph-image$/, "twitter-image"), alt },
+            ],
+          }),
+    },
   };
 }

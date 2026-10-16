@@ -37,5 +37,9 @@ describe("share: link previews", () => {
     expect(a.openGraph).toMatchObject({ title: `X · ${SHARE.name}` });
     const n = withShare("/y", { title: { default: "Y", template: "%s" } });
     expect(n.openGraph).toMatchObject({ title: SHARE.name });
+    expect(n.openGraph).toHaveProperty("images");
+    const c = withShare("/learn/x", { title: "X" }, SHARE, true);
+    expect(c.openGraph).not.toHaveProperty("images");
+    expect(c.twitter).not.toHaveProperty("images");
   });
 });

@@ -16,6 +16,8 @@ import { SECTIONS } from "@/lib/mdx/sections";
 const FIRST = `/learn/${SECTIONS[0]!.slug}`;
 const CHAPTERS: readonly string[] = SECTIONS.map((s) => `/learn/${s.slug}`);
 const HOME = "/";
+/** An ordinary page, which carries the site's card. */
+const OTHER = "/about";
 
 async function meta(page: Page, key: string): Promise<string | null> {
   return page
@@ -63,7 +65,7 @@ test("the landing page: start button, checked strip, figure above the fold on a 
   await expect(page.locator(`[id="${id}"]`)).toHaveCount(1);
 });
 
-for (const path of [HOME, FIRST]) {
+for (const path of [HOME, FIRST, OTHER]) {
   test(`${path} carries Open Graph and Twitter cards`, async ({
     page,
     request,
@@ -78,6 +80,9 @@ for (const path of [HOME, FIRST]) {
       const u = (await meta(page, key))!;
       expect(u, key).toMatch(/^https:\/\//);
       expect(await pngSize(request, u)).toEqual({ w: 1200, h: 630 });
+      // a chapter has its own card
+      if (path === FIRST && /^\/(learn|training)\//.test(FIRST))
+        expect(new URL(u).pathname).toContain(FIRST);
     }
   });
 }

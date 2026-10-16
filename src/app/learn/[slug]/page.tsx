@@ -70,10 +70,15 @@ export async function generateMetadata({
 }) {
   if (!isValidSlug(params.slug)) return {};
   const meta = getSectionMeta(params.slug);
-  return withShare(`/learn/${params.slug}`, {
-    title: meta.title,
-    description: meta.summary,
-  });
+  return withShare(
+    `/learn/${params.slug}`,
+    {
+      title: meta.title,
+      description: meta.summary,
+    },
+    undefined,
+    true,
+  );
 }
 
 export default async function SectionPage({
