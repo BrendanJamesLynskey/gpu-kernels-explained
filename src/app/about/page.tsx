@@ -18,12 +18,13 @@ import {
   NVIDIA_GPU_HUB,
   repoFile,
 } from "@/lib/site";
+import { withShare } from "@/lib/share";
 
-export const metadata = {
+export const metadata = withShare("/about", {
   title: "About",
   description:
     "What GPU Kernels Explained's execution model computes, what is illustrative, and how the model and its animations are checked.",
-};
+});
 
 const A =
   "focus-ring rounded text-accent underline underline-offset-2 dark:text-indigo-300";
@@ -119,7 +120,7 @@ export default function AboutPage(): JSX.Element {
           </li>
         </ul>
 
-        <h2>How it is checked</h2>
+        <h2 id="checked">How it is checked</h2>
         <ul>
           <li>
             <strong>Closed forms.</strong>{" "}

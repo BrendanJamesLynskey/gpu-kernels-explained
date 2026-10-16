@@ -9,12 +9,13 @@ import Link from "next/link";
 
 import { SECTIONS } from "@/lib/mdx/sections";
 import { ARCHITECTURES_URL, CUDA_HUB, NVIDIA_GPU_HUB } from "@/lib/site";
+import { withShare } from "@/lib/share";
 
-export const metadata = {
+export const metadata = withShare("/learn", {
   title: "Learn",
   description:
     "Chapters on how a GPU executes a kernel, each built around an animation driven by the tested execution model.",
-};
+});
 
 export default function LearnIndex(): JSX.Element {
   return (

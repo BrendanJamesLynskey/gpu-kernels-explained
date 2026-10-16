@@ -341,6 +341,14 @@ e2e on a production build, and Lighthouse CI (performance, accessibility
 and best practices must each score at least 90 on `/`, `/gpus` and five
 chapters).
 
+## Sharing
+
+Every page carries Open Graph and Twitter tags, titled and addressed as that page. The link-preview cards (1,200 × 630 PNG)
+are drawn at build time by [`src/app/_og/card.tsx`](src/app/_og/card.tsx), the same file on every companion site, from
+this site's [`src/lib/share.ts`](src/lib/share.ts): one for the site and one per chapter. The favicon
+([`src/app/icon.svg`](src/app/icon.svg)) is the Hardware track's chip with this site's letter, K; [`/sitemap.xml`](src/app/sitemap.ts) lists every page and
+[`/robots.txt`](src/app/robots.ts) allows everything. [`tests/e2e/sharing.spec.ts`](tests/e2e/sharing.spec.ts) checks the tags, the cards, the icons, the sitemap and the landing page's start button, strip and hero. The cards are set in Noto Sans and Noto Sans Mono (subsets, SIL Open Font License 1.1: [`src/app/_og/OFL.txt`](src/app/_og/OFL.txt)).
+
 ## Licence
 
 MIT — see [`LICENSE`](LICENSE).

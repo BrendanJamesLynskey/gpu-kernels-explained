@@ -10,10 +10,11 @@ import type { ReactNode } from "react";
 
 import { SiteHeader } from "@/components/ui/SiteHeader";
 import { SITE_URL } from "@/lib/site";
+import { withShare } from "@/lib/share";
 
 import "./globals.css";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = withShare("/", {
   metadataBase: new URL(SITE_URL),
   title: {
     default: "GPU Kernels Explained",
@@ -21,7 +22,7 @@ export const metadata: Metadata = {
   },
   description:
     "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, and quantised kernels, each animated by a tested execution model.",
-};
+});
 
 export default function RootLayout({
   children,

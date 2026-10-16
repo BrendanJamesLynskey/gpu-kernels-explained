@@ -27,6 +27,7 @@ import {
   isValidSlug,
   readSectionMdx,
 } from "@/lib/mdx/sections";
+import { withShare } from "@/lib/share";
 
 import "katex/dist/katex.min.css";
 
@@ -69,10 +70,10 @@ export async function generateMetadata({
 }) {
   if (!isValidSlug(params.slug)) return {};
   const meta = getSectionMeta(params.slug);
-  return {
+  return withShare(`/learn/${params.slug}`, {
     title: meta.title,
     description: meta.summary,
-  };
+  });
 }
 
 export default async function SectionPage({
