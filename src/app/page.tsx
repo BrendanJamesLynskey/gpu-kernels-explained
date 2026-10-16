@@ -5,6 +5,7 @@ import { CheckedStrip, StartButton } from "@/components/ui/Landing";
 import { RidgeLadder } from "@/components/viz/RidgeLadder";
 import { SECTIONS } from "@/lib/mdx/sections";
 import { formatValue, lookup } from "@/lib/gpu/values";
+import { HardwareWork } from "@/components/home/HardwareWork";
 
 /**
  * Landing page: what the site is, the picture behind every chapter (the
@@ -111,6 +112,7 @@ export default function HomePage(): JSX.Element {
         </Link>
         .
       </p>
+      <HardwareWork />
       <p className="mt-12 text-sm text-neutral-600 dark:text-neutral-400">
         Part of a family of sixteen companion sites in four tracks, all in the
         site menu above: Foundations (

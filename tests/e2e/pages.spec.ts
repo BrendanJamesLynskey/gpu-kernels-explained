@@ -278,3 +278,15 @@ test("the about page ends with the author credit", async ({ page }) => {
     "https://github.com/BrendanJamesLynskey",
   );
 });
+
+test("the landing page links the author's hardware work (brief 42)", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const strip = page.locator("[data-hardware-work]");
+  await expect(strip).toBeVisible();
+  await expect(strip.locator("a")).toHaveCount(10);
+  await expect(
+    strip.locator("a[href$='/LLM_Transformer_Decoder_RTL']"),
+  ).toHaveCount(1);
+});
