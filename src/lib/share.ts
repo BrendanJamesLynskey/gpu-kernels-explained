@@ -28,10 +28,12 @@ export const SHARE: Share = {
   name: "GPU Kernels Explained",
   track: "Hardware",
   claim: "How a GPU actually executes the maths",
-  checkedShort: "Model checked against the CUDA Guide's worked examples; TS port equals the Python reference",
+  checkedShort:
+    "Model checked against the CUDA Guide's worked examples; TS port equals the Python reference",
   color: "#059669",
   url: SITE_URL,
-  description: "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, and quantised kernels, each animated by a tested execution model.",
+  description:
+    "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, and quantised kernels, each animated by a tested execution model.",
 };
 
 /** `m` plus Open Graph and Twitter tags for the page at `path` (titled as `m` titles it). */
@@ -48,7 +50,9 @@ export function withShare<M extends Metadata>(
         ? t.absolute
         : null;
   const title =
-    own && !own.endsWith(share.name) ? `${own} · ${share.name}` : (own ?? share.name);
+    own && !own.endsWith(share.name)
+      ? `${own} · ${share.name}`
+      : (own ?? share.name);
   const description =
     typeof m.description === "string" ? m.description : share.description;
   return {
