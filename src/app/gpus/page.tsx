@@ -15,12 +15,13 @@ import {
   type PresetId,
   type Status,
 } from "@/lib/gpu/model";
+import { withShare } from "@/lib/share";
 
-export const metadata = {
+export const metadata = withShare("/gpus", {
   title: "GPU presets",
   description:
     "The A100 and H100 figures behind every animation, each with its source and status, and the bandwidths and ridge points derived from them.",
-};
+});
 
 const LABELS: Record<string, [string, (v: number) => string]> = {
   sms: ["Streaming multiprocessors (SMs)", (v) => String(v)],

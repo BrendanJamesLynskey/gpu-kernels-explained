@@ -1,5 +1,7 @@
+import type { Route } from "next";
 import Link from "next/link";
 
+import { CheckedStrip, StartButton } from "@/components/ui/Landing";
 import { BandwidthLadder } from "@/components/viz/BandwidthLadder";
 import { SECTIONS } from "@/lib/mdx/sections";
 import { formatValue, lookup } from "@/lib/gpu/values";
@@ -20,25 +22,21 @@ export default function HomePage(): JSX.Element {
       <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">
         How a GPU actually executes the maths.
       </h1>
-      <div className="mt-8 grid items-center gap-8 md:grid-cols-[1fr_minmax(0,22rem)]">
+      <div className="mt-6 grid items-start gap-8 md:grid-cols-[1fr_minmax(0,22rem)]">
         <div>
           <p className="max-w-2xl text-lg text-neutral-600 dark:text-neutral-300">
-            A GPU can do arithmetic far faster than it can fetch the numbers to
-            do it on. An A100&apos;s FP32 units need{" "}
-            {v("a100.ridge_fp32", "num")} flops of work on every byte from its
-            HBM just to keep busy. Every fast kernel is a way of closing that
-            gap: reuse data close to the ALUs, fetch it in whole transactions,
-            avoid serialising on shared memory, keep enough warps in flight.
+            An interactive guide to how a GPU runs kernels: the memory
+            hierarchy, warps, coalescing, occupancy, GEMM and FlashAttention,
+            each animated by a tested execution model.
           </p>
-          <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">
-            Each chapter here is built around an animation, and every frame is
-            computed by a small GPU execution model that is tested against a
-            Python reference. The hardware figures come from NVIDIA&apos;s
-            whitepapers and datasheets, the CUDA Programming Guide and published
-            microbenchmarks.
-          </p>
+          <div className="mt-6">
+            <StartButton href={`/learn/${SECTIONS[0]!.slug}` as Route} />
+          </div>
         </div>
-        <figure className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <figure
+          data-hero-figure
+          className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
+        >
           <BandwidthLadder pid="a100" />
           <figcaption className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
             The A100&apos;s memory levels, bandwidth to scale. HBM is the sliver
@@ -46,6 +44,31 @@ export default function HomePage(): JSX.Element {
           </figcaption>
         </figure>
       </div>
+      <CheckedStrip href="/about#checked">
+        The GPU model is checked against the CUDA Programming Guide&apos;s
+        worked examples (coalescing, bank conflicts, occupancy), and its
+        TypeScript port reproduces the Python reference exactly.
+      </CheckedStrip>
+      <section aria-labelledby="learn-heading" className="mt-12">
+        <h2 id="learn-heading" className="text-xl font-semibold tracking-tight">
+          What you&apos;ll learn
+        </h2>
+        <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">
+          A GPU can do arithmetic far faster than it can fetch the numbers to do
+          it on. An A100&apos;s FP32 units need {v("a100.ridge_fp32", "num")}{" "}
+          flops of work on every byte from its HBM just to keep busy. Every fast
+          kernel is a way of closing that gap: reuse data close to the ALUs,
+          fetch it in whole transactions, avoid serialising on shared memory,
+          keep enough warps in flight.
+        </p>
+        <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">
+          Each chapter here is built around an animation, and every frame is
+          computed by a small GPU execution model that is tested against a
+          Python reference. The hardware figures come from NVIDIA&apos;s
+          whitepapers and datasheets, the CUDA Programming Guide and published
+          microbenchmarks.
+        </p>
+      </section>
       <nav
         aria-label="Chapters"
         className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
