@@ -13,6 +13,7 @@ import {
   bitsPerValue,
   frames,
   maxStages,
+  pipeCaption,
   pipelineDefault,
   ridges,
   stageBytes,
@@ -77,5 +78,23 @@ describe("the warp-specialised pipeline", () => {
     const s = pipelineDefault();
     for (let g = 1; g < s.mmaStart.length; g++)
       expect(s.mmaStart[g]).toBeGreaterThanOrEqual(s.mmaDone[g - 1]!);
+  });
+});
+
+describe("captions", () => {
+  it("say what each engine is doing", () => {
+    const s = pipelineDefault();
+    const f = frames(s);
+    expect(pipeCaption(s, f[0]!)).toBe(
+      "t = 0; the producer issues a TMA load (tile 1, slice 1); the tensor core is idle; 0 of 18 slices done, 0 of 3 tiles stored.",
+    );
+    expect(pipeCaption(s, f[12]!)).toContain(
+      "the tensor core multiplies tile 1, slice 1",
+    );
+    const e = f.find((x) => x.accs.some((a) => a[0] === "epi"))!;
+    expect(pipeCaption(s, e)).toContain("the epilogue drains tile 1");
+    expect(pipeCaption(s, f[s.total]!)).toBe(
+      `t = ${s.total}; the tensor core is idle; 18 of 18 slices done, 3 of 3 tiles stored.`,
+    );
   });
 });
