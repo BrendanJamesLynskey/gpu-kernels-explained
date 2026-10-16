@@ -1,0 +1,117 @@
+<PipelineWidget>
+  <Eq
+    label="In steady state one K-slice finishes every max of the MMA time, the TMA issue interval, and the load latency plus the MMA time divided by the number of stages, rounded up"
+    tex="\Delta = \max\Bigl(\htmlClass{hl-compute}{t_{\text{mma}}},\ t_{\text{issue}},\ \Bigl\lceil \frac{\htmlClass{hl-hbm}{t_{\text{load}}} + \htmlClass{hl-compute}{t_{\text{mma}}}}{\htmlClass{hl-smem}{S}} \Bigr\rceil \Bigr)"
+  />
+</PipelineWidget>
+
+<Layer kind="concept">
+
+[Chapter 7](/learn/07-gemm) ended with a tensor-core GEMM that every warp runs the same way: load a tile, wait, multiply, repeat. Hopper and Blackwell kernels are built differently, because the hardware gives each job its own engine.
+
+- **TMA** (the Tensor Memory Accelerator, Hopper and later) copies a whole tile from global into shared memory on the request of a single thread, asynchronously, and signals completion on a barrier in shared memory (`cp.async.bulk.tensor` in PTX). On the A100 every thread of the block took part in a copy (`cp.async`, 4 to 16 bytes each).
+- **`wgmma`** (Hopper) is issued by a warpgroup of four warps and runs asynchronously; B must come from shared memory, A from registers or shared memory, and the accumulators stay in the warpgroup's registers.
+- **`tcgen05.mma`** (Blackwell) is issued by **one thread** (PTX ISA Table 55), reads its operands from shared memory (A may be in Tensor Memory) and accumulates in **Tensor Memory** (TMEM): a dedicated <V of="tc.b200.tmem_per_sm" fmt="kib" /> per SM, 512 columns by 128 lanes of 32-bit cells, next to the tensor cores. With `cta_group::2` one thread of a pair of CTAs on neighbouring SMs starts an MMA that uses both SMs' tensor cores.
+
+So a kernel splits its warps by role, which is called **warp specialisation**. A producer warp does nothing but issue TMA loads into a ring of shared-memory **stages**; the MMA issuer waits for a stage to fill, multiplies it and releases it; an epilogue reads finished accumulators, converts them and stores C. Two barriers per stage (full, empty) hand the slots back and forth. The animation runs that loop for one CTA: <V of="tc.pipe.default.params.tiles" fmt="int" /> output tiles of <V of="tc.pipe.default.params.ksteps" fmt="int" /> K-slices each.
+
+With the defaults (four stages, two accumulator buffers in TMEM) the tensor core starts as soon as the first load lands and never waits again: busy <V of="tc.pipe.default.util" fmt="pct" /> of the run, the rest being the first load and the last epilogue. Cut the ring to **one** stage and every load is exposed: <V of="tc.pipe.s1.util" fmt="pct" />. Two stages give <V of="tc.pipe.s2.util" fmt="pct" />, three <V of="tc.pipe.s3.util" fmt="pct" />. Set the accumulators to **1 (registers)**, the Hopper case with one consumer warpgroup, and each tile's MMAs wait for the previous tile's epilogue: <V of="tc.pipe.acc1.total" fmt="int" /> time units instead of <V of="tc.pipe.default.total" fmt="int" />. Two accumulator buffers let the epilogue drain one while the tensor core fills the other; Hopper kernels get the same effect with two consumer warpgroups taking turns ("ping-pong"), Blackwell's TMEM holds both accumulators without spending registers. With a long epilogue (set it to 30, longer than a tile's <V of="tc.pipe.default.params.ksteps" fmt="int" /> slices of MMA) even two buffers expose some of it: <V of="tc.pipe.epi30.total" fmt="int" /> units, against <V of="tc.pipe.epi30acc1.total" fmt="int" /> with one.
+
+</Layer>
+
+<Callout kind="illustrative">
+
+The times are integers in illustrative units (an MMA slice takes <V of="tc.pipe.default.params.mma" fmt="int" />, a TMA load <V of="tc.pipe.default.params.load" fmt="int" /> by default), chosen to show the mechanism, not measured on a B200. The model has one CTA and no L2: real loads vary with L2 hits and with how many SMs share the HBM, and a CTA pair or a cluster changes who loads what. The recurrences, the closed form and every frame are tested (reference/blackwell.py against src/lib/gpu/blackwell.ts).
+
+</Callout>
+
+<Layer kind="concept">
+
+**How many stages fit.** A stage holds one K-slice of A and of B. For a 128 × 256 output tile with 64-deep BF16 slices that is <V of="tc.stageBytes" fmt="kib" />, so the B200's <V of="tc.b200.smem_per_sm" fmt="kib" /> of shared memory per SM (compute capability 10.0) holds <V of="tc.b200.stages" fmt="int" /> stages, the H100's <V of="tc.h100.stages" fmt="int" /> and the A100's <V of="tc.a100.stages" fmt="int" />. The steady-state equation says how many are needed: enough that $S$ slices of MMA cover one load's latency plus its MMA. Below that the ring runs dry and the tensor core idles (the hatched gaps); above it, extra stages buy nothing. On Blackwell the accumulators no longer compete with the stages for space: they live in TMEM, and the registers are left for the epilogue.
+
+**The ridge moved again.** The tensor cores' peak divided by HBM bandwidth is the arithmetic intensity a GEMM needs before it stops waiting on memory ([chapter 2](/learn/02-roofline)). It has risen every generation, and each narrower format doubles it:
+
+| GPU          | BF16 dense                               | FP8 dense                               | NVFP4 dense                             | HBM                                  | Ridge, BF16                             | Ridge, FP8                             | Ridge, NVFP4                           |
+| ------------ | ---------------------------------------- | --------------------------------------- | --------------------------------------- | ------------------------------------ | --------------------------------------- | -------------------------------------- | -------------------------------------- |
+| A100         | <V of="tc.a100.peak_bf16" fmt="flops" /> | none                                    | none                                    | <V of="tc.a100.hbm_bw" fmt="rate" /> | <V of="tc.a100.ridge.bf16" fmt="num" /> |                                        |                                        |
+| H100         | <V of="tc.h100.peak_bf16" fmt="flops" /> | <V of="tc.h100.peak_fp8" fmt="flops" /> | none                                    | <V of="tc.h100.hbm_bw" fmt="rate" /> | <V of="tc.h100.ridge.bf16" fmt="num" /> | <V of="tc.h100.ridge.fp8" fmt="num" /> |                                        |
+| B200 (GB200) | <V of="tc.b200.peak_bf16" fmt="flops" /> | <V of="tc.b200.peak_fp8" fmt="flops" /> | <V of="tc.b200.peak_fp4" fmt="flops" /> | <V of="tc.b200.hbm_bw" fmt="rate" /> | <V of="tc.b200.ridge.bf16" fmt="num" /> | <V of="tc.b200.ridge.fp8" fmt="num" /> | <V of="tc.b200.ridge.fp4" fmt="num" /> |
+
+Ridges are in flops per byte. The B200 is the GPU of a GB200 NVL72, with the same figures the [AI Racks](https://ai-racks-explained.vercel.app/learn/02-the-package) and [AI Accelerators](https://ai-accelerators-explained.vercel.app/learn/02-gpus-the-baseline) sites use; the air-cooled HGX B200 board is rated lower. Its BF16 peak is <V of="tc.ratio.b200OverH100" fmt="num" /> times the H100's, and NVFP4 is <V of="tc.ratio.fp4OverBf16" fmt="num" /> times BF16 again. A kernel that reached the H100's ridge has to find more reuse to reach the B200's: bigger tiles, CTA pairs that share operands, L2 reuse across the blocks of a wave.
+
+</Layer>
+
+<Layer kind="concept">
+
+**FP8 and FP4, with block scaling.** An FP8 or FP4 value has too little range to hold a tensor on its own, so it carries a scale. Hopper's FP8 uses one scale per tensor, kept by software. Blackwell's tensor cores apply **block scales inside the MMA** (`tcgen05.mma` with `.kind::mxf8f6f4`, `.kind::mxf4` or `.kind::mxf4nvf4`): every row of A and column of B is cut into blocks, and each block's values are multiplied by its own scale.
+
+| Format                     | Element bits | Elements per scale | Scale                          | Bits per value                     | An 8192 × 8192 matrix                       |
+| -------------------------- | ------------ | ------------------ | ------------------------------ | ---------------------------------- | ------------------------------------------- |
+| BF16                       | 16           |                    | none                           | <V of="tc.bits.bf16" fmt="num" />  | <V of="tc.weightBytes.bf16" fmt="bytes" />  |
+| FP8 E4M3, per-tensor scale | 8            | whole tensor       | FP32                           | <V of="tc.bits.fp8" fmt="num" />   | <V of="tc.weightBytes.fp8" fmt="bytes" />   |
+| MXFP8 (OCP)                | 8            | 32                 | E8M0 (a power of two)          | <V of="tc.bits.mxfp8" fmt="num" /> | <V of="tc.weightBytes.mxfp8" fmt="bytes" /> |
+| MXFP4 (OCP)                | 4 (E2M1)     | 32                 | E8M0                           | <V of="tc.bits.mxfp4" fmt="num" /> | <V of="tc.weightBytes.mxfp4" fmt="bytes" /> |
+| NVFP4                      | 4 (E2M1)     | 16                 | E4M3, plus one FP32 per tensor | <V of="tc.bits.nvfp4" fmt="num" /> | <V of="tc.weightBytes.nvfp4" fmt="bytes" /> |
+
+NVFP4's smaller blocks and finer E4M3 scale track the data more closely than MXFP4's power-of-two scale every 32 values, for a quarter of a bit more per value. What these formats do to accuracy is [Numerics Explained, chapter 10](https://numerics-explained.vercel.app/learn/10-hardware); [chapter 11](/learn/11-quantised-kernels) here is what fewer bytes do to a decode step.
+
+</Layer>
+
+<Layer kind="maths">
+
+Number the K-slices $g = t K + k$ (tile $t$, slice $k$), with $S$ stages and $A$ accumulator buffers. The schedule is a set of max-plus recurrences:
+
+$$
+\begin{aligned}
+L_g &= \max(L_{g-1} + t_{\text{issue}},\ D_{g-S}) && \text{(a slot is free once its MMA is done)}\\
+M_g &= \max(L_g + t_{\text{load}},\ D_{g-1},\ E_{t-A} \text{ if } k = 0) && \text{(data in, tensor core free, buffer drained)}\\
+D_g &= M_g + t_{\text{mma}}, \qquad E_t = \max(D_{tK+K-1},\ E_{t-1}) + t_{\text{epi}}.
+\end{aligned}
+$$
+
+Within a long tile, chase one slot round the ring: slice $g + S$ cannot load before slice $g$'s MMA is done, and then needs $t_{\text{load}} + t_{\text{mma}}$ more, so $S$ consecutive slices take at least $t_{\text{load}} + t_{\text{mma}}$; they also take at least $S\,t_{\text{mma}}$ (one tensor core) and $S\,t_{\text{issue}}$ (one TMA issue stream). The tests check that the model settles to exactly $M_{g+S} - M_g = \max(S\,t_{\text{mma}}, S\,t_{\text{issue}}, t_{\text{load}} + t_{\text{mma}})$, which gives the equation above. The tensor core is never starved once $S \ge (t_{\text{load}} + t_{\text{mma}})/t_{\text{mma}}$: here $(12 + 4)/4 = 4$ stages. With $A = 2$ and $t_{\text{epi}} \le K\Delta$, the epilogue of tile $t$ finishes before tile $t + 2$ needs its buffer, and the run is just $t_{\text{load}} + T K\, t_{\text{mma}} + t_{\text{epi}}$, which a test also checks.
+
+</Layer>
+
+<Layer kind="code">
+
+The recurrences, cut from [`src/lib/gpu/blackwell.ts`](https://github.com/BrendanJamesLynskey/gpu-kernels-explained/blob/main/src/lib/gpu/blackwell.ts) (a line-for-line port of `reference/blackwell.py`):
+
+```ts
+let a = g > 0 ? ls[g - 1]! + issue : 0;
+if (g >= stages && md[g - stages]! > a) a = md[g - stages]!;
+ls.push(a);
+ld.push(a + load);
+let b = ld[g]!;
+if (g > 0 && md[g - 1]! > b) b = md[g - 1]!;
+if (k === 0 && t >= accs && ed[t - accs]! > b) b = ed[t - accs]!;
+```
+
+The shape of a Blackwell main loop, **illustrative and not compiled by this site's CI** (the names follow CUTLASS's pipeline classes; the real calls take descriptors and barrier phases):
+
+```cuda
+if (warp == PRODUCER && lane == 0) {          // one thread issues every load
+  for (int g = 0; g < slices; ++g) {
+    empty[g % S].wait();                      // the slot's last MMA is done
+    tma_load(smemA[g % S], smemB[g % S], full[g % S]);  // completes on full[]
+  }
+} else if (warp == MMA && lane == 0) {        // one thread issues every MMA
+  for (int g = 0; g < slices; ++g) {
+    full[g % S].wait();
+    tcgen05_mma(tmem_acc[tile % 2], smemA[g % S], smemB[g % S]);
+    tcgen05_commit(empty[g % S]);             // free the slot when it finishes
+  }
+}  // epilogue warpgroup: tcgen05.ld from TMEM, convert, store C
+```
+
+</Layer>
+
+<Callout kind="deeper">
+
+- PTX ISA: [§9.7.17 `wgmma`](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions), [§9.7.18 the 5th-generation TensorCore family (`tcgen05`, Tensor Memory, Table 55's issue granularity)](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#tensorcore-5th-generation-instructions) and [`cp.async.bulk.tensor`](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#data-movement-and-conversion-instructions-cp-async-bulk-tensor) (TMA); the CUDA Programming Guide on [asynchronous copies](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/async-copies.html).
+- CUTLASS, [Efficient GEMM in CUDA](https://docs.nvidia.com/cutlass/latest/media/docs/cpp/efficient_gemm.html): pipelining, warp specialisation and the ping-pong and cooperative kernel schedules.
+- NVIDIA, [Inside Blackwell Ultra](https://developer.nvidia.com/blog/inside-nvidia-blackwell-ultra-the-chip-powering-the-ai-factory-era/) (Table 2: the Blackwell and Blackwell Ultra peaks; NVFP4's two-level scaling) and the [GB200 NVL72 specifications](https://www.nvidia.com/en-us/data-center/gb200-nvl72/); Jarmusch and Chandrasekaran, [Microbenchmarking NVIDIA's Blackwell Architecture](https://arxiv.org/abs/2512.02189) (2025: 148 SMs on the B200, TMEM and `tcgen05` measured); Rouhani et al., [Microscaling Data Formats for Deep Learning](https://arxiv.org/abs/2310.10537) (2023: the OCP MX formats).
+- NVIDIA GPU series: [5th-gen tensor cores and MX formats](https://brendanjameslynskey.github.io/NVIDIA_GPU_09_Blackwell/#slide-04), [the Blackwell SM](https://brendanjameslynskey.github.io/NVIDIA_GPU_32_Blackwell_Low_Level/#slide-04), [TMA](https://brendanjameslynskey.github.io/NVIDIA_GPU_04_Memory_Hierarchy/#slide-05) and [MXFP4 against NVFP4](https://brendanjameslynskey.github.io/NVIDIA_GPU_38_BFP4_Formats/#slide-07).
+- [Systolic Arrays Explained, chapter 8](https://systolic-arrays-explained.vercel.app/learn/08-other-ways): tensor cores against systolic arrays; a single-thread MMA into dedicated accumulator memory is a step towards the systolic side.
+
+</Callout>

@@ -32,6 +32,17 @@ import {
   splitKSweep,
   type PresetId,
 } from "./model";
+import {
+  BLOCK_ORDER,
+  TC_ORDER,
+  bitsPerValue,
+  maxStages,
+  pipelineDefault,
+  ridges,
+  stageBytes,
+  tcPreset,
+  weightBytes,
+} from "./blackwell";
 
 export type Fmt =
   | "rate"
@@ -78,14 +89,57 @@ function tree(pid: PresetId): Record<string, unknown> {
   return { ...p, ...d, kernels, sweep, gemm, splitk, quant, attn, reduce };
 }
 
+/** Chapter 12 and the landing page: "tc.<b200|h100|a100>.…", "tc.pipe.…". */
+function tcTree(): Record<string, unknown> {
+  const t: Record<string, unknown> = {};
+  const sb = stageBytes(128, 256, 64, 2);
+  for (const pid of TC_ORDER) {
+    const p = tcPreset(pid);
+    t[pid] = { ...p, ridge: ridges(pid), stages: maxStages(p.smem_per_sm, sb) };
+  }
+  t.stageBytes = sb;
+  const bits: Record<string, unknown> = {};
+  const wb: Record<string, unknown> = {};
+  for (const f of BLOCK_ORDER) {
+    bits[f] = bitsPerValue(f);
+    wb[f] = weightBytes(f, 8192, 8192);
+  }
+  t.bits = bits;
+  t.weightBytes = wb;
+  t.pipe = {
+    default: pipelineDefault(),
+    acc1: pipelineDefault({ accs: 1 }),
+    s1: pipelineDefault({ stages: 1 }),
+    s2: pipelineDefault({ stages: 2 }),
+    s3: pipelineDefault({ stages: 3 }),
+    epi30: pipelineDefault({ epi: 30 }),
+    epi30acc1: pipelineDefault({ epi: 30, accs: 1 }),
+  };
+  // B200 over H100 and A100, BF16 dense, and NVFP4 over BF16 on the B200
+  const b = tcPreset("b200");
+  t.ratio = {
+    b200OverH100: b.peak_bf16 / tcPreset("h100").peak_bf16,
+    fp4OverBf16: b.peak_fp4! / b.peak_bf16,
+  };
+  return t;
+}
+
+let TC: Record<string, unknown> | null = null;
+
 const CACHE = new Map<PresetId, Record<string, unknown>>();
 
 export function lookup(path: string): number | string {
   const [pid, ...rest] = path.split(".");
-  if (pid !== "a100" && pid !== "h100")
-    throw new Error(`bad preset in ${path}`);
-  if (!CACHE.has(pid)) CACHE.set(pid, tree(pid));
-  let cur: unknown = CACHE.get(pid);
+  let cur: unknown;
+  if (pid === "tc") {
+    if (!TC) TC = tcTree();
+    cur = TC;
+  } else {
+    if (pid !== "a100" && pid !== "h100")
+      throw new Error(`bad preset in ${path}`);
+    if (!CACHE.has(pid)) CACHE.set(pid, tree(pid));
+    cur = CACHE.get(pid);
+  }
   for (const k of rest) {
     if (cur === null || typeof cur !== "object" || !(k in cur))
       throw new Error(`no value at ${path}`);

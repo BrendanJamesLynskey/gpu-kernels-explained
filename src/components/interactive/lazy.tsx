@@ -79,3 +79,7 @@ export const QuantWidget = dynamic(() => import("./QuantWidget"), {
   ssr: false,
   loading: loading("animation"),
 });
+export const PipelineWidget = dynamic(() => import("./PipelineWidget"), {
+  ssr: false,
+  loading: loading("animation"),
+});

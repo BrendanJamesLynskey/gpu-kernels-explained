@@ -4,7 +4,9 @@ An animated explainer of how a GPU actually executes the maths: the memory
 hierarchy, the roofline, warps and divergence, coalescing, shared-memory
 bank conflicts and occupancy, then the kernels built on them: GEMM step by
 step, reductions and warp shuffles, online softmax and FlashAttention,
-overlap and split-K, and quantised kernels. Every chapter is built around an animation,
+overlap and split-K, quantised kernels, and the warp-specialised
+tensor-core pipeline of Hopper and Blackwell (TMA, `wgmma` → `tcgen05`,
+Tensor Memory, FP8 and FP4 with block scaling). Every chapter is built around an animation,
 and every frame of every animation is computed by a small **GPU execution
 model** whose TypeScript port matches its Python reference exactly. Every
 hardware figure comes from a published source.
@@ -59,29 +61,31 @@ series.
 
 ## Chapters
 
-| #   | Chapter                                                                                                    | The animation                                                                                                                                                                 |
-| --- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01  | [The memory hierarchy](https://gpu-kernels-explained.vercel.app/learn/01-memory-hierarchy)                 | Data flows HBM → L2 → shared memory → registers → ALUs; pipe widths are bandwidths to scale, packets move at each level's real use. Vector add, two GEMMs, A100 or H100.      |
-| 02  | [The roofline](https://gpu-kernels-explained.vercel.app/learn/02-roofline)                                 | A GEMM's tile size grows from 1 to 128 and its point slides from the memory-bound slope onto the roof; a slider places any intensity.                                         |
-| 03  | [Warps, SIMT and divergence](https://gpu-kernels-explained.vercel.app/learn/03-warps-and-divergence)       | A warp issues every instruction of both paths of a branch, with lanes masked off; four kinds of condition.                                                                    |
-| 04  | [Coalescing](https://gpu-kernels-explained.vercel.app/learn/04-coalescing)                                 | Each lane's address maps to 32-byte sectors; stride, alignment and element size are adjustable.                                                                               |
-| 05  | [Shared-memory bank conflicts](https://gpu-kernels-explained.vercel.app/learn/05-bank-conflicts)           | A 32-bank heat map fills request by request, then drains pass by pass; one word of padding fixes the transpose live.                                                          |
-| 06  | [Occupancy](https://gpu-kernels-explained.vercel.app/learn/06-occupancy)                                   | Thread blocks land on an SM until warp slots, registers or shared memory run out; sliders for each.                                                                           |
-| 07  | [GEMM, step by step](https://gpu-kernels-explained.vercel.app/learn/07-gemm)                               | Tiles of A and B march into a 16 × 16 × 16 multiply, four ways (naive, shared-memory tiles, register blocking, tensor cores), with byte counters and the intensity they give. |
-| 08  | [Reductions and warp shuffles](https://gpu-kernels-explained.vercel.app/learn/08-reductions)               | 64 numbers summed by one block: divergent, strided (bank conflicts), sequential, then warp shuffles; arrows show every add.                                                   |
-| 09  | [Softmax and FlashAttention](https://gpu-kernels-explained.vercel.app/learn/09-softmax-and-flashattention) | FlashAttention-2's tile loop with HBM bytes against standard attention's; online softmax rescaling its running sum, checked against the ordinary softmax.                     |
-| 10  | [Split-K, streams and overlap](https://gpu-kernels-explained.vercel.app/learn/10-split-k-and-overlap)      | A load / compute / store timeline with one, two or three buffers; split-K filling the SMs wave by wave.                                                                       |
-| 11  | [Quantised kernels](https://gpu-kernels-explained.vercel.app/learn/11-quantised-kernels)                   | Eight INT4 weights unpacked and dequantised in one register; a layer's time against batch size in four formats.                                                               |
+| #   | Chapter                                                                                                    | The animation                                                                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01  | [The memory hierarchy](https://gpu-kernels-explained.vercel.app/learn/01-memory-hierarchy)                 | Data flows HBM → L2 → shared memory → registers → ALUs; pipe widths are bandwidths to scale, packets move at each level's real use. Vector add, two GEMMs, A100 or H100.                                        |
+| 02  | [The roofline](https://gpu-kernels-explained.vercel.app/learn/02-roofline)                                 | A GEMM's tile size grows from 1 to 128 and its point slides from the memory-bound slope onto the roof; a slider places any intensity.                                                                           |
+| 03  | [Warps, SIMT and divergence](https://gpu-kernels-explained.vercel.app/learn/03-warps-and-divergence)       | A warp issues every instruction of both paths of a branch, with lanes masked off; four kinds of condition.                                                                                                      |
+| 04  | [Coalescing](https://gpu-kernels-explained.vercel.app/learn/04-coalescing)                                 | Each lane's address maps to 32-byte sectors; stride, alignment and element size are adjustable.                                                                                                                 |
+| 05  | [Shared-memory bank conflicts](https://gpu-kernels-explained.vercel.app/learn/05-bank-conflicts)           | A 32-bank heat map fills request by request, then drains pass by pass; one word of padding fixes the transpose live.                                                                                            |
+| 06  | [Occupancy](https://gpu-kernels-explained.vercel.app/learn/06-occupancy)                                   | Thread blocks land on an SM until warp slots, registers or shared memory run out; sliders for each.                                                                                                             |
+| 07  | [GEMM, step by step](https://gpu-kernels-explained.vercel.app/learn/07-gemm)                               | Tiles of A and B march into a 16 × 16 × 16 multiply, four ways (naive, shared-memory tiles, register blocking, tensor cores), with byte counters and the intensity they give.                                   |
+| 08  | [Reductions and warp shuffles](https://gpu-kernels-explained.vercel.app/learn/08-reductions)               | 64 numbers summed by one block: divergent, strided (bank conflicts), sequential, then warp shuffles; arrows show every add.                                                                                     |
+| 09  | [Softmax and FlashAttention](https://gpu-kernels-explained.vercel.app/learn/09-softmax-and-flashattention) | FlashAttention-2's tile loop with HBM bytes against standard attention's; online softmax rescaling its running sum, checked against the ordinary softmax.                                                       |
+| 10  | [Split-K, streams and overlap](https://gpu-kernels-explained.vercel.app/learn/10-split-k-and-overlap)      | A load / compute / store timeline with one, two or three buffers; split-K filling the SMs wave by wave.                                                                                                         |
+| 11  | [Quantised kernels](https://gpu-kernels-explained.vercel.app/learn/11-quantised-kernels)                   | Eight INT4 weights unpacked and dequantised in one register; a layer's time against batch size in four formats.                                                                                                 |
+| 12  | [Hopper and Blackwell GEMM](https://gpu-kernels-explained.vercel.app/learn/12-hopper-and-blackwell-gemm)   | A producer warp's TMA loads fill a ring of shared-memory stages while single-thread MMAs consume them into Tensor Memory, with the epilogue overlapped; stages, accumulators, latency and epilogue as controls. |
 
 ### The hero animations
 
 Recorded frame by frame from the model's states (`pnpm animations`); each is
 also a WebM video in [`docs/media/`](docs/media/).
 
-|                                                                                                               |                                                                                                                                    |
-| ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| ![GEMM with shared-memory tiles: slices of A and B march in while a block of C fills up](docs/media/gemm.gif) | ![FlashAttention-2's tile loop: score tiles computed on chip, HBM bytes against standard attention](docs/media/flashattention.gif) |
-| ![Double buffering: loads hide behind compute on a three-engine timeline](docs/media/overlap.gif)             | ![The memory hierarchy: data flowing at each level's real rate](docs/media/memory-hierarchy.gif)                                   |
+|                                                                                                                                                                         |                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| ![GEMM with shared-memory tiles: slices of A and B march in while a block of C fills up](docs/media/gemm.gif)                                                           | ![FlashAttention-2's tile loop: score tiles computed on chip, HBM bytes against standard attention](docs/media/flashattention.gif) |
+| ![Double buffering: loads hide behind compute on a three-engine timeline](docs/media/overlap.gif)                                                                       | ![The memory hierarchy: data flowing at each level's real rate](docs/media/memory-hierarchy.gif)                                   |
+| ![A warp-specialised GEMM: TMA loads into shared-memory stages, single-thread MMAs, two accumulator buffers in Tensor Memory](docs/media/hopper-blackwell-pipeline.gif) |                                                                                                                                    |
 
 ## Screenshots
 
@@ -138,7 +142,15 @@ the site is a pure function of one state.
 
 ### Presets and sources
 
-Two presets ship, **A100 SXM4 40 GB** and **H100 SXM5 80 GB**. Every figure
+Two CUDA-core presets ship, **A100 SXM4 40 GB** and **H100 SXM5 80 GB**,
+plus three tensor-core presets for chapter 12 and the landing page
+([`reference/blackwell.py`](reference/blackwell.py)): the same A100 and
+H100, and the **B200 as in a GB200 NVL72** (BF16 2.5, FP8 5 and NVFP4 10
+PFLOP/s dense, 8 TB/s, 186 GB, from NVIDIA's GB200 NVL72 page and the
+Blackwell Ultra blog's Table 2: the same figures as the AI Racks and AI
+Accelerators sites; 148 SMs from Jarmusch and Chandrasekaran,
+arXiv:2512.02189). NVIDIA does not publish the B200's clock, L2 or
+latencies, so the CUDA-core chapters stay on the A100 and H100. Every figure
 has a status (`spec`, `rule`, `measured`, `derived` or `approximation`)
 and a source with the table or page; the site lists them all at
 [`/gpus`](https://gpu-kernels-explained.vercel.app/gpus). The sources:

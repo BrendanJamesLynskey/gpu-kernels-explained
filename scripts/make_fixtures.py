@@ -5,6 +5,9 @@ reference (reference/gpu_model.py):
   src/data/presets.json          the presets, sources and kernels the site shows
   tests/fixtures/gpu_fixtures.json  reference results the TypeScript port must
                                  reproduce exactly (tests/unit/model.test.ts)
+  src/data/tensor.json           chapter 12's tensor-core presets (reference/blackwell.py)
+  tests/fixtures/blackwell_fixtures.json  the same for reference/blackwell.py
+                                 (tests/unit/blackwell.test.ts)
 
     python3 scripts/make_fixtures.py          # write both
     python3 scripts/make_fixtures.py --check  # fail if either is out of date (CI)
@@ -18,6 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "reference"))
 
+import blackwell as bw  # noqa: E402
 import gpu_model as g  # noqa: E402
 
 PRESET_IDS = ("a100", "h100")
@@ -136,6 +140,45 @@ def fixtures() -> dict:
     return out
 
 
+# chapter 12's pipeline: the widget's controls stay inside this grid
+PIPE_GRID = [
+    {"stages": st, "accs": a, "load": ld, "epi": ep}
+    for st in range(1, 7)
+    for a in (1, 2)
+    for ld in (4, 12, 24)
+    for ep in (0, 8, 30)
+]
+PIPE_FRAMES = [{}, {"accs": 1}, {"stages": 2}, {"load": 24, "stages": 6}]
+
+
+def tensor_data() -> dict:
+    """The tensor-core presets and formats chapter 12 and the landing page show."""
+    return {
+        "sources": bw.SOURCES,
+        "presets": [bw.TC_PRESETS[pid] for pid in bw.TC_ORDER],
+        "order": list(bw.TC_ORDER),
+        "blockFormats": bw.BLOCK_FORMATS,
+        "blockOrder": list(bw.BLOCK_ORDER),
+        "pipeDefault": bw.PIPE_DEFAULT,
+    }
+
+
+def blackwell_fixtures() -> dict:
+    out: dict = {
+        "presets": {pid: bw.tc_preset(pid) for pid in bw.TC_ORDER},
+        "ridges": {pid: bw.ridges(pid) for pid in bw.TC_ORDER},
+        "bits": {f: bw.bits_per_value(f) for f in bw.BLOCK_ORDER},
+        "weightBytes": {f: bw.weight_bytes(f, 8192, 8192) for f in bw.BLOCK_ORDER},
+        "stages": {
+            pid: bw.max_stages(bw.tc_preset(pid)["smem_per_sm"], bw.stage_bytes(128, 256, 64, 2))
+            for pid in bw.TC_ORDER
+        },
+        "pipelines": [{"over": o, "out": bw.pipeline_default(**o)} for o in PIPE_GRID],
+        "frames": [{"over": o, "out": bw.frames(bw.pipeline_default(**o))} for o in PIPE_FRAMES],
+    }
+    return out
+
+
 def dump(obj: dict, indent: int | None = 1) -> str:
     return json.dumps(obj, indent=indent, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -144,6 +187,8 @@ def dump(obj: dict, indent: int | None = 1) -> str:
 TARGETS = {
     ROOT / "src" / "data" / "presets.json": (site_data, 1),
     ROOT / "tests" / "fixtures" / "gpu_fixtures.json": (fixtures, None),
+    ROOT / "src" / "data" / "tensor.json": (tensor_data, 1),
+    ROOT / "tests" / "fixtures" / "blackwell_fixtures.json": (blackwell_fixtures, None),
 }
 
 

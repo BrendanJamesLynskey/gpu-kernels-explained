@@ -6,6 +6,7 @@
 import { expect, test, type Locator } from "@playwright/test";
 
 import fx from "../fixtures/gpu_fixtures.json";
+import bfx from "../fixtures/blackwell_fixtures.json";
 
 import {
   bankCaption,
@@ -23,6 +24,11 @@ import {
   sweepCaption,
   timelineCaption,
 } from "@/lib/gpu/captions";
+import {
+  pipeCaption,
+  type PipeFrame,
+  type Schedule,
+} from "@/lib/gpu/blackwell";
 import {
   GEMM_MARCH,
   preset,
@@ -326,5 +332,51 @@ test("dequantising in registers, then the quantised layer", async ({
   for (const s of [0, 6, 10]) {
     await show(q, s);
     await expect(q.getByTestId("caption")).toHaveText(quantCaption(rows(s)));
+  }
+});
+
+test("chapter 12: the warp-specialised pipeline", async ({ page }) => {
+  await page.goto("/learn/12-hopper-and-blackwell-gemm");
+  const fig = page.getByTestId("pipeline-widget");
+  const svg = fig.locator("svg[data-pipe-t]");
+  const pick = (over: Record<string, number>) => {
+    const want = { stages: 4, accs: 2, load: 12, epi: 8, ...over };
+    const sched = bfx.pipelines.find(
+      (c) =>
+        c.over.stages === want.stages &&
+        c.over.accs === want.accs &&
+        c.over.load === want.load &&
+        c.over.epi === want.epi,
+    )!.out as unknown as Schedule;
+    const frames = bfx.frames.find(
+      (c) => JSON.stringify(c.over) === JSON.stringify(over),
+    )!.out as unknown as PipeFrame[];
+    return { sched, frames };
+  };
+  for (const [over, radio] of [
+    [{}, null],
+    [{ accs: 1 }, "1 (registers)"],
+  ] as const) {
+    if (radio) {
+      const before = (await fig.getAttribute("data-key")) ?? "";
+      await fig.getByRole("radio", { name: radio }).click();
+      await expect(fig).not.toHaveAttribute("data-key", before);
+    }
+    const { sched, frames } = pick(over);
+    for (const s of [0, 13, 40, frames.length - 1]) {
+      await show(fig, s);
+      await expect(fig.getByTestId("caption")).toHaveText(
+        pipeCaption(sched, frames[s]!),
+      );
+      await expect(svg).toHaveAttribute(
+        "data-tensor",
+        String(frames[s]!.tensor),
+      );
+      for (let i = 0; i < frames[s]!.slots.length; i++)
+        await expect(fig.locator(`[data-slot="${i}"]`)).toHaveAttribute(
+          "data-state",
+          frames[s]!.slots[i]![0],
+        );
+    }
   }
 });

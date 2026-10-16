@@ -77,6 +77,12 @@ export const SECTIONS = [
     summary:
       "Low-precision weights cut the bytes a decode step reads; the kernel dequantises them in registers, just before the multiply.",
   },
+  {
+    slug: "12-hopper-and-blackwell-gemm",
+    title: "Hopper and Blackwell GEMM",
+    summary:
+      "TMA fills a ring of shared-memory stages while one thread issues the tensor-core MMAs: warp specialisation, wgmma to tcgen05 and Tensor Memory, and FP8 and FP4 with block scaling.",
+  },
 ] as const;
 
 export type SectionSlug = (typeof SECTIONS)[number]["slug"];

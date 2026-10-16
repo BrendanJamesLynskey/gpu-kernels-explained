@@ -33,7 +33,9 @@ for (const f of FILES) {
 
     it("cuts every TypeScript block from the model source", () => {
       const model = squash(
-        readFileSync(path.join(ROOT, "src/lib/gpu/model.ts"), "utf8"),
+        ["src/lib/gpu/model.ts", "src/lib/gpu/blackwell.ts"]
+          .map((f) => readFileSync(path.join(ROOT, f), "utf8"))
+          .join("\n"),
       );
       const blocks = [...src.matchAll(/```ts\n([\s\S]*?)```/g)].map(
         (m) => m[1]!,

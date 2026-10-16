@@ -21,6 +21,7 @@ const PAGES = [
   "/learn/09-softmax-and-flashattention",
   "/learn/10-split-k-and-overlap",
   "/learn/11-quantised-kernels",
+  "/learn/12-hopper-and-blackwell-gemm",
 ];
 
 for (const [scheme, width] of [

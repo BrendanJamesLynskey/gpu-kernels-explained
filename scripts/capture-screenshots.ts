@@ -100,6 +100,12 @@ const SHOTS: Shot[] = [
     widget: "quant-widget",
     step: 6,
   },
+  {
+    name: "17-hopper-blackwell-pipeline",
+    path: "/learn/12-hopper-and-blackwell-gemm",
+    widget: "pipeline-widget",
+    step: 30,
+  },
 ];
 
 async function main(): Promise<void> {

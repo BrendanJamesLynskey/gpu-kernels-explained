@@ -2,7 +2,7 @@ import type { Route } from "next";
 import Link from "next/link";
 
 import { CheckedStrip, StartButton } from "@/components/ui/Landing";
-import { BandwidthLadder } from "@/components/viz/BandwidthLadder";
+import { RidgeLadder } from "@/components/viz/RidgeLadder";
 import { SECTIONS } from "@/lib/mdx/sections";
 import { formatValue, lookup } from "@/lib/gpu/values";
 
@@ -25,9 +25,10 @@ export default function HomePage(): JSX.Element {
       <div className="mt-6 grid items-start gap-8 md:grid-cols-[1fr_minmax(0,22rem)]">
         <div>
           <p className="max-w-2xl text-lg text-neutral-600 dark:text-neutral-300">
-            An interactive guide to how a GPU runs kernels: the memory
-            hierarchy, warps, coalescing, occupancy, GEMM and FlashAttention,
-            each animated by a tested execution model.
+            An interactive guide to how a GPU runs kernels, from the A100 to
+            Blackwell: the memory hierarchy, warps, coalescing, occupancy, GEMM,
+            FlashAttention and the warp-specialised tensor-core pipeline, each
+            animated by a tested execution model.
           </p>
           <div className="mt-6">
             <StartButton href={`/learn/${SECTIONS[0]!.slug}` as Route} />
@@ -37,10 +38,11 @@ export default function HomePage(): JSX.Element {
           data-hero-figure
           className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800"
         >
-          <BandwidthLadder pid="a100" />
+          <RidgeLadder />
           <figcaption className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">
-            The A100&apos;s memory levels, bandwidth to scale. HBM is the sliver
-            at the bottom.
+            Flops of tensor-core work each byte from HBM must feed before the
+            GPU stops waiting on memory (dense peak over HBM bandwidth), to
+            scale. Each generation, and each narrower format, moves it right.
           </figcaption>
         </figure>
       </div>
@@ -55,11 +57,21 @@ export default function HomePage(): JSX.Element {
         </h2>
         <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">
           A GPU can do arithmetic far faster than it can fetch the numbers to do
-          it on. An A100&apos;s FP32 units need {v("a100.ridge_fp32", "num")}{" "}
-          flops of work on every byte from its HBM just to keep busy. Every fast
-          kernel is a way of closing that gap: reuse data close to the ALUs,
-          fetch it in whole transactions, avoid serialising on shared memory,
-          keep enough warps in flight.
+          it on. A B200&apos;s tensor cores need{" "}
+          {v("tc.b200.ridge.bf16", "num")} flops of BF16 work on every byte from
+          its HBM just to keep busy ({v("tc.b200.ridge.fp4", "num")} at NVFP4);
+          an H100&apos;s needed {v("tc.h100.ridge.bf16", "num")} and an
+          A100&apos;s {v("tc.a100.ridge.bf16", "num")}. Every fast kernel is a
+          way of closing that gap: reuse data close to the ALUs, fetch it in
+          whole transactions, avoid serialising on shared memory, keep the
+          tensor cores fed from a pipeline of loads.{" "}
+          <Link
+            href={"/learn/12-hopper-and-blackwell-gemm" as Route}
+            className="focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+          >
+            Chapter 12
+          </Link>{" "}
+          shows how Hopper and Blackwell kernels do it.
         </p>
         <p className="mt-4 max-w-2xl text-neutral-600 dark:text-neutral-300">
           Each chapter here is built around an animation, and every frame is
