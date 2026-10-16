@@ -1,0 +1,325 @@
+{
+ "blockFormats": {
+  "bf16": {
+   "bits": 16,
+   "block": 0,
+   "name": "BF16",
+   "scale": "none",
+   "scale_bits": 0,
+   "src": "ptx-tcgen05"
+  },
+  "fp8": {
+   "bits": 8,
+   "block": 0,
+   "name": "FP8 E4M3, per-tensor scale",
+   "scale": "FP32 per tensor",
+   "scale_bits": 0,
+   "src": "ptx-tcgen05"
+  },
+  "mxfp4": {
+   "bits": 4,
+   "block": 32,
+   "name": "MXFP4 (E2M1)",
+   "scale": "E8M0",
+   "scale_bits": 8,
+   "src": "ocp-mx"
+  },
+  "mxfp8": {
+   "bits": 8,
+   "block": 32,
+   "name": "MXFP8 (E4M3)",
+   "scale": "E8M0",
+   "scale_bits": 8,
+   "src": "ocp-mx"
+  },
+  "nvfp4": {
+   "bits": 4,
+   "block": 16,
+   "name": "NVFP4 (E2M1)",
+   "scale": "E4M3, plus FP32 per tensor",
+   "scale_bits": 8,
+   "src": "bwu-blog"
+  }
+ },
+ "blockOrder": [
+  "bf16",
+  "fp8",
+  "mxfp8",
+  "mxfp4",
+  "nvfp4"
+ ],
+ "order": [
+  "a100",
+  "h100",
+  "b200"
+ ],
+ "pipeDefault": {
+  "accs": 2,
+  "epi": 8,
+  "issue": 2,
+  "ksteps": 6,
+  "load": 12,
+  "mma": 4,
+  "stages": 4,
+  "tiles": 3
+ },
+ "presets": [
+  {
+   "arch": "Ampere, compute capability 8.0",
+   "fields": {
+    "hbm_bw": {
+     "ref": "Table 4 (Memory Bandwidth), p. 37",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 1555000000000.0
+    },
+    "hbm_bytes": {
+     "ref": "Table 4 (Memory Size 40 GB), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 40000000000.0
+    },
+    "loads": {
+     "ref": "compute capability 8.0",
+     "src": "cuda-cc",
+     "st": "rule",
+     "v": "cp.async: threads copy global to shared memory, 4 to 16 bytes each"
+    },
+    "mma": {
+     "ref": "§9.7.16 (warp-level mma)",
+     "src": "ptx-wgmma",
+     "st": "rule",
+     "v": "mma.sync: one warp, operands and accumulators in registers"
+    },
+    "peak_bf16": {
+     "ref": "Table 4 (Peak BF16 Tensor TFLOPS with FP32 accumulate, dense), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 312000000000000.0
+    },
+    "peak_fp4": {
+     "ref": "no FP4 mode",
+     "src": "a100-wp",
+     "st": "none",
+     "v": null
+    },
+    "peak_fp8": {
+     "ref": "Ampere tensor cores have no FP8 mode",
+     "src": "a100-wp",
+     "st": "none",
+     "v": null
+    },
+    "peak_int8": {
+     "ref": "Table 4 (Peak INT8 Tensor TOPS, dense), p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 624000000000000.0
+    },
+    "smem_per_sm": {
+     "ref": "Table 5 (configurable up to 164 KB), p. 43; CUDA guide Table 32",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 167936
+    },
+    "sms": {
+     "ref": "Table 4, p. 36",
+     "src": "a100-wp",
+     "st": "spec",
+     "v": 108
+    },
+    "tmem_per_sm": {
+     "ref": "no Tensor Memory: accumulators live in registers",
+     "src": "a100-wp",
+     "st": "none",
+     "v": null
+    }
+   },
+   "id": "a100",
+   "name": "A100 SXM4 40 GB"
+  },
+  {
+   "arch": "Hopper, compute capability 9.0",
+   "fields": {
+    "hbm_bw": {
+     "ref": "GPU Memory Bandwidth 3.35TB/s",
+     "src": "h100-page",
+     "st": "spec",
+     "v": 3350000000000.0
+    },
+    "hbm_bytes": {
+     "ref": "GPU Memory 80GB",
+     "src": "h100-page",
+     "st": "spec",
+     "v": 80000000000.0
+    },
+    "loads": {
+     "ref": "§9.7.10.28.5.3 (cp.async.bulk.tensor)",
+     "src": "ptx-wgmma",
+     "st": "rule",
+     "v": "TMA (cp.async.bulk.tensor): one thread copies a whole tile, completion on an mbarrier"
+    },
+    "mma": {
+     "ref": "§9.7.17",
+     "src": "ptx-wgmma",
+     "st": "rule",
+     "v": "wgmma.mma_async: a warpgroup (4 warps), asynchronous; B from shared memory, A from registers or shared memory, accumulators in registers"
+    },
+    "peak_bf16": {
+     "ref": "BFLOAT16 Tensor Core 1,979 teraFLOPS is 'with sparsity'; dense is half",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 989500000000000.0
+    },
+    "peak_fp4": {
+     "ref": "no FP4 mode",
+     "src": "h100-page",
+     "st": "none",
+     "v": null
+    },
+    "peak_fp8": {
+     "ref": "FP8 Tensor Core 3,958 teraFLOPS is 'with sparsity'; dense is half",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 1979000000000000.0
+    },
+    "peak_int8": {
+     "ref": "INT8 Tensor Core 3,958 TOPS is 'with sparsity'; dense is half",
+     "src": "h100-page",
+     "st": "derived",
+     "v": 1979000000000000.0
+    },
+    "smem_per_sm": {
+     "ref": "Table 4 (configurable up to 228 KB), p. 41; CUDA guide Table 32",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 233472
+    },
+    "sms": {
+     "ref": "Table 3 (H100 SXM5), p. 39",
+     "src": "h100-wp",
+     "st": "spec",
+     "v": 132
+    },
+    "tmem_per_sm": {
+     "ref": "no Tensor Memory: wgmma accumulates in registers",
+     "src": "ptx-wgmma",
+     "st": "none",
+     "v": null
+    }
+   },
+   "id": "h100",
+   "name": "H100 SXM5 80 GB"
+  },
+  {
+   "arch": "Blackwell, compute capability 10.0",
+   "fields": {
+    "hbm_bw": {
+     "ref": "GB200 Superchip: 16 TB/s for 2 GPUs, so 8 TB/s per GPU (bwu-blog Table 2: 8 TB/s)",
+     "src": "gb200-page",
+     "st": "derived",
+     "v": 8000000000000.0
+    },
+    "hbm_bytes": {
+     "ref": "GB200 Superchip: 372 GB HBM3E for 2 GPUs, so 186 GB per GPU",
+     "src": "gb200-page",
+     "st": "derived",
+     "v": 186000000000.0
+    },
+    "loads": {
+     "ref": "§9.7.18.9",
+     "src": "ptx-tcgen05",
+     "st": "rule",
+     "v": "TMA, as on Hopper; tcgen05.cp copies shared memory into Tensor Memory"
+    },
+    "mma": {
+     "ref": "§9.7.18.5, Table 55",
+     "src": "ptx-tcgen05",
+     "st": "rule",
+     "v": "tcgen05.mma: issued by a single thread (or one thread of a CTA pair), operands in shared memory (A may be in Tensor Memory), accumulators in Tensor Memory"
+    },
+    "peak_bf16": {
+     "ref": "GB200 Superchip FP16/BF16 10 PFLOPS is sparse for 2 GPUs: dense per GPU = 10 / 2 / 2",
+     "src": "gb200-page",
+     "st": "derived",
+     "v": 2500000000000000.0
+    },
+    "peak_fp4": {
+     "ref": "Table 2, Blackwell: NVFP4 dense 10 PetaFLOPS (GB200 Superchip: 20 PFLOPS dense for 2 GPUs)",
+     "src": "bwu-blog",
+     "st": "spec",
+     "v": 1e+16
+    },
+    "peak_fp8": {
+     "ref": "Table 2, Blackwell: FP8 dense 5 PetaFLOPS",
+     "src": "bwu-blog",
+     "st": "spec",
+     "v": 5000000000000000.0
+    },
+    "peak_int8": {
+     "ref": "GB200 Superchip INT8 20 POPS sparse for 2 GPUs: dense per GPU = 20 / 2 / 2",
+     "src": "gb200-page",
+     "st": "derived",
+     "v": 5000000000000000.0
+    },
+    "smem_per_sm": {
+     "ref": "compute capability 10.0: maximum shared memory per SM 228 KB",
+     "src": "cuda-cc",
+     "st": "rule",
+     "v": 233472
+    },
+    "sms": {
+     "ref": "§III-A: 'feature 148 SMs spread across eight GPCs' (NVIDIA's pages give no SM count)",
+     "src": "jarmusch2025",
+     "st": "measured",
+     "v": 148
+    },
+    "tmem_per_sm": {
+     "ref": "§9.7.18.1: 512 columns x 128 lanes of 32-bit cells per CTA on sm_100a",
+     "src": "ptx-tcgen05",
+     "st": "rule",
+     "v": 262144
+    }
+   },
+   "id": "b200",
+   "name": "B200 (as in GB200 NVL72)"
+  }
+ ],
+ "sources": {
+  "a100-wp": {
+   "title": "NVIDIA A100 Tensor Core GPU Architecture (whitepaper)",
+   "url": "https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf"
+  },
+  "bwu-blog": {
+   "title": "Inside NVIDIA Blackwell Ultra: The Chip Powering the AI Factory Era (NVIDIA Technical Blog), Table 2",
+   "url": "https://developer.nvidia.com/blog/inside-nvidia-blackwell-ultra-the-chip-powering-the-ai-factory-era/"
+  },
+  "cuda-cc": {
+   "title": "CUDA Programming Guide, Compute capabilities (technical specifications per compute capability)",
+   "url": "https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html"
+  },
+  "gb200-page": {
+   "title": "NVIDIA GB200 NVL72 product page, Specifications (GB200 Superchip column: two Blackwell GPUs)",
+   "url": "https://www.nvidia.com/en-us/data-center/gb200-nvl72/"
+  },
+  "h100-page": {
+   "title": "NVIDIA H100 product page, Product Specifications (H100 SXM column)",
+   "url": "https://www.nvidia.com/en-us/data-center/h100/"
+  },
+  "jarmusch2025": {
+   "title": "Jarmusch and Chandrasekaran, Microbenchmarking NVIDIA's Blackwell Architecture: An in-depth Architectural Analysis (arXiv 2512.02189)",
+   "url": "https://arxiv.org/abs/2512.02189"
+  },
+  "ocp-mx": {
+   "title": "Rouhani et al., Microscaling Data Formats for Deep Learning (arXiv 2310.10537): the OCP MX formats, 32 elements per shared E8M0 scale",
+   "url": "https://arxiv.org/abs/2310.10537"
+  },
+  "ptx-tcgen05": {
+   "title": "PTX ISA, §9.7.18 TensorCore 5th Generation Family Instructions (Tensor Memory; Table 55, issue granularity)",
+   "url": "https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#tensorcore-5th-generation-instructions"
+  },
+  "ptx-wgmma": {
+   "title": "PTX ISA, §9.7.17 Asynchronous Warpgroup Level Matrix Multiply-Accumulate (wgmma)",
+   "url": "https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions"
+  }
+ }
+}

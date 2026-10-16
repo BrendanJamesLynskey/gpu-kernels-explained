@@ -10,7 +10,8 @@
         "http://localhost:3000/learn/03-warps-and-divergence",
         "http://localhost:3000/learn/06-occupancy",
         "http://localhost:3000/learn/07-gemm",
-        "http://localhost:3000/learn/09-softmax-and-flashattention"
+        "http://localhost:3000/learn/09-softmax-and-flashattention",
+        "http://localhost:3000/learn/12-hopper-and-blackwell-gemm"
       ],
       "numberOfRuns": 3
     },

@@ -21,7 +21,7 @@ export const metadata: Metadata = withShare("/", {
     template: "%s · GPU Kernels Explained",
   },
   description:
-    "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, and quantised kernels, each animated by a tested execution model.",
+    "How a GPU actually executes the maths: the memory hierarchy, the roofline, warps and divergence, coalescing, bank conflicts and occupancy, then GEMM, reductions, softmax and FlashAttention, split-K and overlap, quantised kernels and the Hopper and Blackwell tensor-core pipeline (TMA, tcgen05, Tensor Memory, FP4), each animated by a tested execution model.",
 });
 
 export default function RootLayout({

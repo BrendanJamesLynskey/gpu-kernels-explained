@@ -20,6 +20,7 @@ const ANIMATIONS = [
   ["/learn/10-split-k-and-overlap", "splitk-widget"],
   ["/learn/11-quantised-kernels", "dequant-widget"],
   ["/learn/11-quantised-kernels", "quant-widget"],
+  ["/learn/12-hopper-and-blackwell-gemm", "pipeline-widget"],
 ] as const;
 
 async function step(fig: Locator): Promise<number> {

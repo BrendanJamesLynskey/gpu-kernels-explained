@@ -16,6 +16,7 @@ import {
   HierarchyWidget,
   OccupancyWidget,
   QuantWidget,
+  PipelineWidget,
   ReductionWidget,
   RooflineWidget,
   SimtWidget,
@@ -49,4 +50,5 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SplitKWidget,
   DequantWidget,
   QuantWidget,
+  PipelineWidget,
 };

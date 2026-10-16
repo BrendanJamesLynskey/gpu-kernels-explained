@@ -15,12 +15,19 @@ import {
   type PresetId,
   type Status,
 } from "@/lib/gpu/model";
+import {
+  TC_RECORDS,
+  TC_SOURCES,
+  ridges,
+  type TcField,
+  type TcId,
+} from "@/lib/gpu/blackwell";
 import { withShare } from "@/lib/share";
 
 export const metadata = withShare("/gpus", {
   title: "GPU presets",
   description:
-    "The A100 and H100 figures behind every animation, each with its source and status, and the bandwidths and ridge points derived from them.",
+    "The A100, H100 and B200 figures behind every animation, each with its source and status, and the bandwidths and ridge points derived from them.",
 });
 
 const LABELS: Record<string, [string, (v: number) => string]> = {
@@ -112,6 +119,59 @@ function Row({ k, f }: { k: string; f: Field }): JSX.Element {
   );
 }
 
+const TC_LABELS: Record<string, [string, (v: number) => string]> = {
+  sms: ["Streaming multiprocessors (SMs)", (v) => String(v)],
+  smem_per_sm: ["Shared memory per SM (max)", fmtKiB],
+  peak_bf16: ["Peak BF16 tensor (dense)", fmtFlops],
+  peak_fp8: ["Peak FP8 tensor (dense)", fmtFlops],
+  peak_fp4: ["Peak NVFP4 tensor (dense)", fmtFlops],
+  peak_int8: [
+    "Peak INT8 tensor (dense)",
+    (v) => fmtFlops(v).replace("FLOP", "OP"),
+  ],
+  hbm_bw: ["HBM bandwidth", fmtRate],
+  hbm_bytes: ["HBM capacity", fmtBytes],
+  tmem_per_sm: ["Tensor Memory per SM", fmtKiB],
+  mma: ["Matrix instruction", (v) => String(v)],
+  loads: ["Tile loads", (v) => String(v)],
+};
+
+function TcRow({ k, f }: { k: string; f: TcField }): JSX.Element {
+  const [label, fmt] = TC_LABELS[k] ?? [k, (v: number) => String(v)];
+  const src = TC_SOURCES[f.src] ?? SOURCES[f.src];
+  const st = f.st as Status | "none";
+  return (
+    <tr>
+      <td>{label}</td>
+      <td
+        className={
+          typeof f.v === "number" ? "whitespace-nowrap font-mono" : "text-xs"
+        }
+      >
+        {f.v === null ? "none" : typeof f.v === "number" ? fmt(f.v) : f.v}
+      </td>
+      <td>
+        <span
+          data-status={st}
+          className={`rounded px-1.5 py-0.5 font-mono text-[0.7rem] ${st === "none" ? "border border-neutral-400" : STATUS_STYLE[st]}`}
+        >
+          {st}
+        </span>
+      </td>
+      <td className="text-xs">
+        {src ? (
+          <a href={src.url} className={A}>
+            {f.src}
+          </a>
+        ) : (
+          f.src
+        )}
+        : {f.ref}
+      </td>
+    </tr>
+  );
+}
+
 function Table({ children }: { children: React.ReactNode }): JSX.Element {
   return (
     <div
@@ -138,13 +198,13 @@ export default function GpusPage(): JSX.Element {
       </h1>
       <p className="mt-4 text-neutral-600 dark:text-neutral-300">
         The model is parameterised: any GPU is a set of the figures below. Two
-        presets ship, each figure with a status. <strong>spec</strong>: NVIDIA
-        states it. <strong>rule</strong>: the CUDA documentation or toolkit
-        states it. <strong>measured</strong>: a published microbenchmark.{" "}
-        <strong>derived</strong>: computed from other figures, with the formula.{" "}
-        <strong>approximation</strong>: a stand-in, named as such. The presets
-        are approximations of the real parts and the model is not
-        cycle-accurate; the figures are what the animations compute from.
+        CUDA-core presets ship, each figure with a status. <strong>spec</strong>
+        : NVIDIA states it. <strong>rule</strong>: the CUDA documentation or
+        toolkit states it. <strong>measured</strong>: a published
+        microbenchmark. <strong>derived</strong>: computed from other figures,
+        with the formula. <strong>approximation</strong>: a stand-in, named as
+        such. The presets are approximations of the real parts and the model is
+        not cycle-accurate; the figures are what the animations compute from.
       </p>
 
       {PRESET_RECORDS.map((r) => {
@@ -217,6 +277,50 @@ export default function GpusPage(): JSX.Element {
           </section>
         );
       })}
+
+      <section className="mt-12" id="tensor-cores" data-preset="tensor">
+        <h2 className="text-2xl font-semibold tracking-tight">
+          Tensor-core presets (chapter 12)
+        </h2>
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+          Chapter 12 and the landing page compare the tensor cores of three
+          generations. The A100 and H100 rows reuse the figures above; the B200
+          is the GPU of a GB200 NVL72, with the same figures and sources as the
+          AI Racks and AI Accelerators sites. NVIDIA does not publish the
+          B200&apos;s clock, L2 or latencies, so the B200 is not offered in the
+          CUDA-core chapters; <strong>none</strong> marks a format the part does
+          not have.
+        </p>
+        {TC_RECORDS.map((r) => {
+          const rd = ridges(r.id as TcId);
+          return (
+            <div key={r.id} className="mt-6" data-tc-preset={r.id}>
+              <h3 className="font-semibold">{r.name}</h3>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {r.arch}. Ridge points (flops per HBM byte): BF16{" "}
+                {trim(rd.bf16!)}
+                {rd.fp8 !== null ? `, FP8 ${trim(rd.fp8)}` : ""}
+                {rd.fp4 !== null ? `, NVFP4 ${trim(rd.fp4)}` : ""}.
+              </p>
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Figure</th>
+                    <th>Value</th>
+                    <th>Status</th>
+                    <th>Source</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(r.fields).map(([k, f]) => (
+                    <TcRow key={k} k={k} f={f} />
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+          );
+        })}
+      </section>
 
       <section className="mt-12">
         <h2 className="text-2xl font-semibold tracking-tight">

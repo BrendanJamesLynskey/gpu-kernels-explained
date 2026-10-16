@@ -50,6 +50,12 @@ const CLIPS: Clip[] = [
     widget: "timeline-widget",
     fps: 3,
   },
+  {
+    name: "hopper-blackwell-pipeline",
+    path: "/learn/12-hopper-and-blackwell-gemm",
+    widget: "pipeline-widget",
+    fps: 10,
+  },
 ];
 
 async function main(): Promise<void> {

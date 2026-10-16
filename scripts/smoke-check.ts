@@ -83,7 +83,8 @@ async function main(): Promise<void> {
   const checks: Promise<Result>[] = [
     checkPage(base, "/", [
       "GPU Kernels Explained",
-      formatValue(lookup("a100.ridge_fp32"), "num"),
+      formatValue(lookup("tc.b200.ridge.bf16"), "num"),
+      "data-ridge-ladder",
       ...SWITCH,
     ]),
     checkPage(base, "/gpus", [

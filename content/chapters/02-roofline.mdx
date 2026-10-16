@@ -11,7 +11,7 @@
 
 The animation steps a 4096 × 4096 × 4096 FP32 matrix multiply through tile sizes from 1 to 128. Every block of $b \times b$ outputs loads its $b$ rows of A and $b$ columns of B once and reuses each value $b$ times, so the intensity grows with the tile: about $b/4$ flops per byte. With 1×1 tiles the kernel manages <V of="a100.sweep.1.perf" fmt="flops" />; with 32×32 tiles, <V of="a100.sweep.32.perf" fmt="flops" />, still on the slope; at 64×64 it passes the A100's ridge and meets the FP32 roof. On the H100, whose ridge sits further right, it takes 128×128.
 
-The dashed roof is the BF16 tensor cores, about 16 (A100) or 15 (H100) times higher than FP32. Its ridge is at <V of="a100.ridge_tensor" fmt="ai" /> on the A100: tensor-core kernels need far more reuse before they stop waiting on memory. That is why the GEMM chapter's last step, and FlashAttention, are about keeping tiles on chip.
+The dashed roof is the BF16 tensor cores, about 16 (A100) or 15 (H100) times higher than FP32. Its ridge is at <V of="a100.ridge_tensor" fmt="ai" /> on the A100: tensor-core kernels need far more reuse before they stop waiting on memory. That is why the GEMM chapter's last step, and FlashAttention, are about keeping tiles on chip. A B200 (the GPU of a GB200 NVL72) moves it to <V of="tc.b200.ridge.bf16" fmt="num" /> flops per byte in BF16 and <V of="tc.b200.ridge.fp4" fmt="num" /> in NVFP4: [chapter 12](/learn/12-hopper-and-blackwell-gemm) compares the three generations and shows how a Hopper or Blackwell kernel keeps its tensor cores fed.
 
 Slide the intensity yourself: below the ridge, every doubling of $I$ doubles the attainable speed; above it, nothing changes.
 
