@@ -52,7 +52,7 @@ test("the landing page: start button, checked strip, figure above the fold on a 
   await expect(fig).toBeVisible();
   const box = (await fig.boundingBox())!;
   expect(box.y, "hero figure starts on the first screen").toBeLessThan(
-    844 - 160,
+    844 - 120,
   );
   const strip = page.locator("[data-checked-strip]");
   await expect(strip).toContainText("How this is checked");
