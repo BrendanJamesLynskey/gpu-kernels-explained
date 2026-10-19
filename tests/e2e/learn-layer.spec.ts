@@ -132,3 +132,20 @@ test("with no JavaScript the question and the answer are in the page", async ({
   );
   await ctx.close();
 });
+
+test("the Hardware start page: reading order, prerequisites, glossary", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.locator("[data-track-start] a").click();
+  await expect(page).toHaveURL(/\/hardware$/);
+  const order = page.getByTestId("reading-order");
+  await expect(order.locator("li")).toHaveCount(4);
+  await expect(order.locator("[aria-current=page]")).toContainText("Kernels");
+  await expect(
+    page.getByRole("heading", { name: "What you need first" }),
+  ).toBeVisible();
+  expect(
+    await page.locator("[data-track-glossary] dt a").count(),
+  ).toBeGreaterThanOrEqual(30);
+});

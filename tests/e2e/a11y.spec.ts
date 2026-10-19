@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 const PAGES = [
   "/",
   "/learn",
+  "/hardware",
   "/gpus",
   "/about",
   "/learn/01-memory-hierarchy",
