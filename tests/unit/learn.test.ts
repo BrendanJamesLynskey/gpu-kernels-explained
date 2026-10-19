@@ -113,6 +113,8 @@ describe("every chapter: three self-checks and a Remember box", () => {
       source.slice(start).match(/^\s*(<V [^>]*\/>|\{" "\})+\s*$/m),
     ).toBeNull();
     expect(source.slice(start).match(/^\s*<V\s*$/m)).toBeNull();
+    // nor a bracket left dangling by the wrap ("( 2 ms )" in the page)
+    expect(source.slice(start).match(/\($|^\s*\)/m)).toBeNull();
   });
 
   it("ids are unique across the site and name their chapter", () => {
