@@ -115,7 +115,17 @@ export default function HardwarePage(): JSX.Element {
         </h2>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
           Each term links to the section that defines it, on the site that
-          defines it.
+          defines it. Some terms mean different things on different sites
+          (goodput, ρ, the pipeline bubble); the{" "}
+          <a
+            href="https://agent-harnesses-explained.vercel.app/definitions"
+            className={LINK}
+            data-definitions-link
+          >
+            shared definitions
+          </a>{" "}
+          give each one definition and one formula, and say where a site
+          differs.
         </p>
         <dl
           data-track-glossary

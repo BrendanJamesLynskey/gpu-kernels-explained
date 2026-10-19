@@ -280,6 +280,19 @@ test("the about page ends with the author credit", async ({ page }) => {
   );
 });
 
+test("the about page links the shared definitions (brief 44D)", async ({
+  page,
+}) => {
+  await page.goto("/about");
+  const link = page
+    .locator("[data-definitions-link]")
+    .getByRole("link", { name: "shared definitions" });
+  await expect(link).toHaveAttribute(
+    "href",
+    "https://agent-harnesses-explained.vercel.app/definitions",
+  );
+});
+
 test("the landing page links the author's hardware work (brief 42)", async ({
   page,
 }) => {
