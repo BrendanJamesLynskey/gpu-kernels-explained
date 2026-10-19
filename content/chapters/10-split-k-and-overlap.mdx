@@ -7,6 +7,8 @@
 
 <Layer kind="concept">
 
+<span id="k-overlap" />
+
 A GPU has separate engines for moving data and for computing on it, and a fast kernel keeps them all busy at once. The same pattern appears at two scales:
 
 - **Inside a kernel**, a block loads the next tile into shared memory while it computes on the current one (double buffering, or a deeper pipeline). On the A100 the loads are `cp.async` copies that bypass the registers; on the H100 the Tensor Memory Accelerator (TMA) moves whole tiles.
@@ -24,6 +26,8 @@ The animation is the model's schedule for six tiles on three engines: copy in, c
 </SplitKWidget>
 
 <Layer kind="concept">
+
+<span id="k-splitk" />
 
 Overlap needs enough independent work. A GEMM with a small output and a long $k$ (a 512 × 512 result from 16,384-long dot products, as in some projection layers at small batch) has only 16 output tiles of 128 × 128: 16 blocks for <V of="a100.sms" fmt="int" /> SMs on an A100, so 85% of the GPU sits idle. **Split-K** cuts the $k$ dimension into $s$ slices: each block computes a partial sum of one tile over one slice, and a second pass adds the $s$ partial sums. More blocks fill more SMs, at the price of writing and re-reading the partial sums.
 
@@ -104,3 +108,69 @@ for (int t = 0; t < ntiles; ++t) {
 - New to training? [Training, chapter 11: data parallelism](https://transformer-training-explained.vercel.app/training/11-data-parallelism) (the Training site, in the Foundations track): the same overlap at cluster scale, with the gradient all-reduce hidden behind the backward pass.
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k10-q1"
+  n={1}
+  input="number"
+  v="ch10.buf2.speedup"
+  tol={0.05}
+  q="The compute-heavy timeline: 6 tiles, load 2, compute 3, store 1. How many times faster are two buffers than one?"
+  href="#k-overlap"
+  more="Overlap"
+>
+  With one buffer the loads and computes alternate; with two, each load hides
+  behind the previous compute and the compute engine sets the pace: $31 / 21
+  \approx$ <V v="ch10.buf2.speedup" fmt="num" />.
+</Check>
+
+<Check
+  id="k10-q2"
+  n={2}
+  choices={["Faster again", "No change", "Slower"]}
+  answer={1}
+  q="Add a third buffer to the same fixed-time workload. What happens?"
+  href="#k-overlap"
+  more="Overlap"
+>
+  No change: after the pipeline fills, the slowest engine already runs without a
+  break. A third buffer helps only when the engines' times vary from tile to
+  tile.
+</Check>
+
+<Check
+  id="k10-q3"
+  n={3}
+  input="slider"
+  min={1}
+  max={12}
+  step={1}
+  v="ch10.a100.bestSplit"
+  fmt="int"
+  tol={0}
+  q="The 512 × 512 × 16384 BF16 GEMM on the A100: which split count is fastest?"
+  href="#k-splitk"
+  more="Split-K"
+>
+  <V v="ch10.a100.bestSplit" fmt="int" />: 96 blocks still fit one wave of the
+  A100's <V of="a100.sms" fmt="int" /> SMs, while 7 spill into a second, mostly
+  idle wave. On the H100's 132 SMs the best is
+  <V v="ch10.h100.bestSplit" fmt="int" />.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Copy engines and SMs are separate hardware: double buffering loads the next tile while this one computes.
+- With two or more buffers the steady state runs at the slowest engine's pace; more buffers help only when the times vary.
+- A small output leaves SMs idle; split-K makes more blocks at the cost of a reduction pass.
+- Wave quantisation: the best split is the largest that still fits in one wave.
+
+<Keep>
+  $T_{\ge 2} \approx t_{\text{load}} + n \max(t_{\text{load}}, t_{\text{comp}}, t_{\text{store}}) + t_{\text{store}}$.
+</Keep>
+
+</Remember>

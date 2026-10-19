@@ -25,7 +25,7 @@ import { SECTIONS } from "@/lib/mdx/sections";
 /** The author credit: the last line of the About page (brief 35). */
 const CREDIT = [
   'data-author-credit="true">Built by',
-  'href="https://github.com/BrendanJamesLynskey">Brendan Lynskey</a>',
+  'href="https://brendanjameslynskey.github.io/">Brendan Lynskey</a>',
 ];
 
 type Result = { path: string; ok: boolean; detail: string };
@@ -94,6 +94,10 @@ async function main(): Promise<void> {
       fmtRate(h100.bw.l2),
     ]),
     checkPage(base, "/about", [...CREDIT, "The execution model"]),
+    checkPage(base, "/hardware", [
+      'data-testid="reading-order"',
+      "data-track-glossary",
+    ]),
     checkPage(
       base,
       "/learn",
@@ -104,6 +108,7 @@ async function main(): Promise<void> {
         'data-layer="concept"',
         "data-pending-widget",
         'class="katex"',
+        "data-self-check=",
         ...SWITCH,
       ]),
     ),

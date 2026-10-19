@@ -7,11 +7,17 @@
 
 <Layer kind="concept">
 
+<span id="k-banks" />
+
 Shared memory is split into **32 banks**: "successive 32-bit words map to successive banks. Each bank has a bandwidth of 32 bits per clock cycle" (CUDA Programming Guide §2.3.4.2). Word $w$ lives in bank $w \bmod 32$, which is why the animation draws memory as rows of 32 words: a word's column _is_ its bank.
 
 If the 32 lanes of a warp ask for words in 32 different banks, one pass serves them all. If several lanes ask a bank for _different_ words, the bank serves them one per pass: a **bank conflict**, and "the access to the data in that bank will be serialized". If they ask for the _same_ word, it is **broadcast** to all of them at no extra cost.
 
+<span id="k-padding" />
+
 The default is the guide's own example. A 32 × 32 tile of floats, `float s[32][32]`, read down a column (lane $i$ reads `s[i][0]`, as a transpose does): every word sits in column 0, so all 32 requests queue at bank 0 and the warp needs **32 passes**, a 32-way conflict. Now move the padding slider to 1, making the array `s[32][33]`: each row is one word longer, so row $i$'s first word moves to bank $i$, the column becomes a diagonal, and the conflict disappears. The cost is 32 unused words.
+
+<span id="k-patterns" />
 
 Other patterns to try: a **row** read is conflict-free; a **stride** of 2 words gives the guide's two-way conflict, while stride 3, or any odd stride, is conflict-free; and **broadcast** has eight lanes share each word, still one pass.
 
@@ -76,3 +82,66 @@ out[...] = tile[threadIdx.x][threadIdx.y];  // column read: no conflict either
 - NVIDIA, CUDA Programming Guide: [shared memory access patterns](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#shared-memory-access-patterns) and [bank conflicts](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#shared-memory-bank-conflicts).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k05-q1"
+  n={1}
+  input="number"
+  v="ch05.col.pad0"
+  fmt="int"
+  tol={0}
+  q="A warp reads one column of float s[32][32], lane i reading s[i][0]. How many passes does shared memory need?"
+  href="#k-padding"
+  more="The column read"
+>
+  <V v="ch05.col.pad0" fmt="int" />: every word of the column sits in bank 0, so
+  the 32 requests queue at one bank, a 32-way conflict.
+</Check>
+
+<Check
+  id="k05-q2"
+  n={2}
+  input="number"
+  v="ch05.col.pad2"
+  fmt="int"
+  tol={0}
+  q="Pad each row by 2 words instead of 1, making it s[32][34]. How many passes now?"
+  href="#k-padding"
+  more="Padding"
+>
+  <V v="ch05.col.pad2" fmt="int" />, not 1. With padding $p$ the column behaves
+  like a stride of $p$ words, and a stride $d$ costs $\gcd(d, 32)$ passes: one
+  word of padding is the fix, two is not.
+</Check>
+
+<Check
+  id="k05-q3"
+  n={3}
+  choices={["A 3-way conflict", "Conflict-free: one pass", "A 32-way conflict"]}
+  answer={1}
+  q="Lanes read with a stride of 3 words. What does the warp get?"
+  href="#k-patterns"
+  more="Other patterns"
+>
+  One pass (<V v="ch05.stride3" fmt="int" /> in the model): $\gcd(3, 32) = 1$,
+  so the 32 lanes land in 32 different banks. Every odd stride is conflict-free;
+  a stride of 4 costs <V v="ch05.stride4" fmt="int" />.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- 32 banks: word $w$ lives in bank $w \bmod 32$.
+- Different words in one bank are served one per pass; the same word is broadcast.
+- A stride of $d$ words costs $\gcd(d, 32)$ passes: every odd stride is free.
+- One word of padding per row turns a column into a diagonal.
+
+<Keep>
+  `float tile[32][33]`: one word of padding removes the transpose's 32-way
+  conflict.
+</Keep>
+
+</Remember>

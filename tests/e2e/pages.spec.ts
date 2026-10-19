@@ -7,6 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
 const PAGES = [
   "/",
   "/learn",
+  "/hardware",
   "/gpus",
   "/about",
   "/learn/01-memory-hierarchy",
@@ -275,7 +276,7 @@ test("the about page ends with the author credit", async ({ page }) => {
   const link = credit.getByRole("link", { name: "Brendan Lynskey" });
   await expect(link).toHaveAttribute(
     "href",
-    "https://github.com/BrendanJamesLynskey",
+    "https://brendanjameslynskey.github.io/",
   );
 });
 
@@ -285,7 +286,12 @@ test("the landing page links the author's hardware work (brief 42)", async ({
   await page.goto("/");
   const strip = page.locator("[data-hardware-work]");
   await expect(strip).toBeVisible();
-  await expect(strip.locator("a")).toHaveCount(10);
+  await expect(strip.locator("a")).toHaveCount(11);
+  // the portfolio home comes first (brief 44)
+  await expect(strip.locator("a").first()).toHaveAttribute(
+    "href",
+    "https://brendanjameslynskey.github.io/",
+  );
   await expect(
     strip.locator("a[href$='/LLM_Transformer_Decoder_RTL']"),
   ).toHaveCount(1);

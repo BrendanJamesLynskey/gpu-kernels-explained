@@ -7,12 +7,16 @@
 
 <Layer kind="concept">
 
+<span id="k-four-ways" />
+
 A matrix multiply $C = AB$ does $2n^3$ flops on $3n^2$ numbers, so in principle every number can be reused $n$ times. A kernel's whole job is to arrange that reuse close to the ALUs. The animation shows four ways, on a problem small enough to draw: a 16 × 16 × 16 multiply, worked a block of C at a time, with the k dimension in slices of 4.
 
 1. **Naive.** One thread per output; each thread reads its row of A and its column of B straight from global memory. Every value of A is fetched once per column of C. The counters stop at <V of="a100.gemm.naive.ai.l2" fmt="ai" /> on the 4096³ problem: the GPU spends its time waiting.
 2. **Tiled in shared memory.** A block of threads loads a tile of A and a tile of B into shared memory together, once, and every thread of the block reads them from there. A value fetched from global memory is now used by a whole row or column of the block: intensity at L2 rises to <V of="a100.gemm.smem.ai.l2" fmt="ai" /> for 32 × 32 blocks. But each multiply-add still reads two values from shared memory, so shared memory becomes the limit ([chapter 1](/learn/01-memory-hierarchy)).
 3. **Register blocking.** Each thread computes an 8 × 8 patch of C: per k it loads 8 values of A and 8 of B into registers and does 64 multiply-adds with them. Shared-memory traffic per flop falls 8-fold, the block grows to 128 × 128, and on the A100 the kernel finally reaches the FP32 roof: <V of="a100.gemm.regs.achieved" fmt="flops" /> in the model.
 4. **Tensor cores.** Whole tiles go to a matrix instruction that does a small matrix multiply in one go, with BF16 inputs and FP32 sums. On the A100 a warp issues `mma.sync` with both tiles in its registers. On the H100 `wgmma` is issued by a _warpgroup_ (four warps) and runs asynchronously; its B tile must come from shared memory, and A from registers or shared memory. On Blackwell, `tcgen05.mma` is issued by a single thread, reads its tiles from shared memory (A may also sit in the new Tensor Memory) and accumulates in Tensor Memory ([PTX ISA, §9.7.17–9.7.18](https://docs.nvidia.com/cuda/parallel-thread-execution/index.html#asynchronous-warpgroup-level-matrix-instructions)). The model here is the A100's. Half the bytes per value and a roof 16 times higher (on the A100). Now the same 128 × 128 tiles give <V of="a100.gemm.tensor.ai.hbm" fmt="ai" /> from HBM, well below the tensor ridge at <V of="a100.ridge_tensor" fmt="ai" />: under the model's no-reuse assumption the kernel is memory-bound again, at <V of="a100.gemm.tensor.achieved" fmt="flops" />.
+
+<span id="k-lesson" />
 
 That last line is the lesson of the chapter: each step moved the bottleneck, and the faster the ALUs, the more reuse a kernel needs. Production tensor-core kernels use larger tiles (128 × 256), keep neighbouring blocks working on the same rows and columns so their loads hit L2, and on Hopper share tiles between blocks of a cluster. [Chapter 12](/learn/12-hopper-and-blackwell-gemm) builds the modern version: TMA loads into a ring of shared-memory stages, single-thread `tcgen05` MMAs on Blackwell and accumulators in Tensor Memory.
 
@@ -73,6 +77,8 @@ for (int k0 = 0; k0 < K; k0 += TILE) {
 
 </Layer>
 
+<span id="k-table" />
+
 ## The four kernels on a 4096³ GEMM (model)
 
 | Kernel                       | Flop per byte from L2                       | Bound by (A100)   | Time, A100                                   | Time, H100                                   |
@@ -92,3 +98,70 @@ for (int k0 = 0; k0 < K; k0 += TILE) {
 - [LLM Architectures Explained](https://llm-architectures-explained.vercel.app/learn) counts the flops of every model's layers; this chapter is how those flops are executed.
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k07-q1"
+  n={1}
+  choices={[
+    "The tensor cores: it is compute-bound",
+    "HBM: it is memory-bound again",
+    "Shared memory",
+  ]}
+  answer={1}
+  q="Switch the 128 × 128 kernel to BF16 tensor cores on the A100. In the model, what limits it?"
+  href="#k-lesson"
+  more="The lesson of the chapter"
+>
+  HBM. Its intensity, <V of="a100.gemm.tensor.ai.hbm" fmt="ai" />, is far below
+  the tensor ridge at <V of="a100.ridge_tensor" fmt="ai" />, so it reaches only
+  <V of="a100.gemm.tensor.achieved" fmt="flops" />: the faster the ALUs, the
+  more reuse a kernel needs.
+</Check>
+
+<Check
+  id="k07-q2"
+  n={2}
+  input="number"
+  v="ch07.regsOverNaive"
+  tol={0.15}
+  q="On the 4096³ problem, how many times faster is the register-blocked kernel than the naive one on the A100?"
+  href="#k-table"
+  more="The four kernels, timed"
+>
+  <V of="a100.gemm.naive.total" fmt="time" /> against
+  <V of="a100.gemm.regs.total" fmt="time" />: the same flops, with each value
+  reused from shared memory and registers instead of fetched again from global
+  memory.
+</Check>
+
+<Check
+  id="k07-q3"
+  n={3}
+  choices={["It doubles", "It does not change", "It halves"]}
+  answer={1}
+  q="Double the depth b_k of each k-slice a block loads. What happens to its global arithmetic intensity?"
+  href="#k-four-ways"
+  more="The four ways"
+>
+  It does not change: the flops and the bytes of a step both grow with $b_k$,
+  which cancels in $I = 2/(e\,(1/b_n + 1/b_m))$. The slice depth sets how much
+  shared memory a stage needs; the tile's width sets the reuse.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- A GEMM can reuse each number $n$ times; a kernel's job is to make that reuse happen close to the ALUs.
+- Shared-memory tiles cut global traffic; register blocking cuts shared-memory traffic 8-fold with 8 × 8 patches.
+- For square blocks the global intensity is $b/e$: $b/4$ in FP32, $b/2$ in BF16.
+- Faster ALUs need more reuse: bigger tiles, L2 reuse and clusters ([chapter 12](/learn/12-hopper-and-blackwell-gemm)).
+
+<Keep>
+  $I_{\text{global}} = 2/(e\,(1/b_n + 1/b_m))$: the tile's width, not its
+  depth, sets the reuse.
+</Keep>
+
+</Remember>

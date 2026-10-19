@@ -20,6 +20,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { LayerToggle } from "@/components/interactive/LayerToggle";
+import { CHECK_YOURSELF_ID } from "@/components/learn/CheckYourself";
 import { mdxComponents } from "@/lib/mdx/components";
 import {
   SECTIONS,
@@ -111,6 +112,21 @@ export default async function SectionPage({
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             {meta.summary}
           </p>
+          {mdx.includes("<CheckYourself") && (
+            <p className="mt-2 text-sm">
+              <a
+                href={`#${CHECK_YOURSELF_ID}`}
+                data-check-yourself-link
+                className="focus-ring rounded text-accent underline decoration-accent/40 underline-offset-2 hover:decoration-accent dark:text-indigo-300"
+              >
+                Check yourself ↓
+              </a>
+              <span className="text-neutral-500 dark:text-neutral-400">
+                {" "}
+                three questions and what to remember, at the end
+              </span>
+            </p>
+          )}
         </div>
         <LayerToggle />
       </div>
@@ -120,6 +136,13 @@ export default async function SectionPage({
           source={mdx}
           components={mdxComponents}
           options={{
+            // next-mdx-remote 6 deletes every JavaScript expression by
+            // default (blockJS: true), including expression props such as
+            // the self-checks' n={1} and choices={[…]} (brief 44). The
+            // chapters are first-party files reviewed like the code;
+            // blockDangerousJS stays on (no eval, Function, process, …).
+            blockJS: false,
+            blockDangerousJS: true,
             mdxOptions: {
               remarkPlugins: [remarkGfm, remarkMath],
               rehypePlugins: [rehypeKatex, rehypeFocusableMath],
