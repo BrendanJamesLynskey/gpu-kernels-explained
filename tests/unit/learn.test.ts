@@ -109,7 +109,9 @@ describe("every chapter: three self-checks and a Remember box", () => {
     expect(remember.match(/<Keep>/g)).toHaveLength(1);
     // a line that is only a <V /> becomes its own paragraph in MDX: never
     // leave one mid-sentence (it broke a reveal's text in two)
-    expect(source.slice(start).match(/^\s*<V [^>]*\/>\s*$/m)).toBeNull();
+    expect(
+      source.slice(start).match(/^\s*(<V [^>]*\/>|\{" "\})+\s*$/m),
+    ).toBeNull();
   });
 
   it("ids are unique across the site and name their chapter", () => {

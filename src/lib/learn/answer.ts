@@ -9,7 +9,10 @@ import { formatValue, lookup, type Fmt } from "@/lib/gpu/values";
 import { learnValue } from "@/lib/learn/values";
 
 /** The raw model value behind `of` or `v`. */
-export function resolveRaw(of?: string, v?: string): number | string {
+export function resolveRaw(
+  of?: string,
+  v?: string,
+): ReturnType<typeof lookup> | number {
   if (of !== undefined) return lookup(of);
   if (v !== undefined) return learnValue(v);
   throw new Error("a numeric self-check needs `of` or `v`");
