@@ -112,6 +112,7 @@ describe("every chapter: three self-checks and a Remember box", () => {
     expect(
       source.slice(start).match(/^\s*(<V [^>]*\/>|\{" "\})+\s*$/m),
     ).toBeNull();
+    expect(source.slice(start).match(/^\s*<V\s*$/m)).toBeNull();
   });
 
   it("ids are unique across the site and name their chapter", () => {
