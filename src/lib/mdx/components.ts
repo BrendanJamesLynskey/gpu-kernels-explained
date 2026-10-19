@@ -2,7 +2,8 @@
  * MDX components map (as on the companion sites). The animations come
  * through `lazy.tsx`, so each chapter loads only its own widget's code;
  * `Eq` renders an equation with KaTeX on the server (pass it as a widget's
- * child); `V` prints a number from the model.
+ * child); `V` prints a number from the model; `CheckYourself`, `Check`,
+ * `Remember` and `Keep` are the learning layer (brief 44).
  */
 import type { MDXRemoteProps } from "next-mdx-remote/rsc";
 
@@ -24,6 +25,9 @@ import {
   SplitKWidget,
   TimelineWidget,
 } from "@/components/interactive/lazy";
+import { CheckYourself } from "@/components/learn/CheckYourself";
+import { Keep, Remember } from "@/components/learn/Remember";
+import { Check } from "@/components/mdx/Check";
 import { Eq } from "@/components/mdx/Eq";
 import { V } from "@/components/mdx/V";
 import { Callout } from "@/components/ui/Callout";
@@ -36,6 +40,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Callout,
   Eq,
   V,
+  CheckYourself,
+  Check,
+  Remember,
+  Keep,
   HierarchyWidget,
   RooflineWidget,
   SimtWidget,

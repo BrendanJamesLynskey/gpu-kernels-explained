@@ -11,6 +11,8 @@
 
 The arithmetic still happens in BF16 (for weight-only formats such as W4A16): the kernel loads the packed weights, **dequantises them in registers**, just before the multiply-add, and never writes the BF16 weights anywhere. The animation does it for one 32-bit register holding eight 4-bit weights: shift and mask out each 4-bit integer $q$, subtract the offset 8 to centre it, multiply by the scale $s$ of its group (here one scale per 128 weights, stored in 16 bits), and multiply-add with the activation. Production kernels unpack several weights at once with bit-manipulation tricks and feed the results to the tensor cores; the order of operations is the same.
 
+<span id="k-compute-bound" />
+
 When the whole layer has enough tokens to be compute-bound, the bytes stop mattering and the tensor cores' rate does. A W4A16 kernel still runs at the BF16 tensor peak; only formats whose _maths_ is narrower go faster there: INT8 tensor cores (<V of="a100.peak_int8_tensor" fmt="flops" /> dense on the A100, twice its BF16 rate) for W8A8, or FP8 on the H100.
 
 </Layer>
@@ -23,6 +25,8 @@ When the whole layer has enough tokens to be compute-bound, the bytes stop matte
 </QuantWidget>
 
 <Layer kind="concept">
+
+<span id="k-batch" />
 
 The second animation applies one 8192 × 8192 layer (67 million weights) to a growing batch of tokens. At batch 1 on the A100 the model gives <V of="a100.quant.bf16.1.total" fmt="time" /> in BF16, <V of="a100.quant.int8.1.total" fmt="time" /> in INT8 and <V of="a100.quant.int4.1.total" fmt="time" /> in INT4: <V of="a100.quant.int4.1.weight_bytes" fmt="bytes" /> of INT4 weights and scales instead of <V of="a100.quant.bf16.1.weight_bytes" fmt="bytes" />. The lines stay flat while the batch shares one read of the weights, then bend upwards where the tensor cores take over, and the INT4 line bends first, because it has fewer bytes to hide behind. From there on, the weight-only formats are no faster than BF16, and only W8A8, with its INT8 tensor cores, keeps an advantage.
 
@@ -103,3 +107,70 @@ for (int j = 0; j < 8; ++j) {
 - Inference Trade-offs Explained: [quantisation as a serving lever](https://inference-tradeoffs-explained.vercel.app/learn/09-quantisation), what FP8 and INT4 weights and an FP8 KV cache do to goodput, latency, cost and energy on five workloads (simulated).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k11-q1"
+  n={1}
+  input="number"
+  v="ch11.int4Speedup.b1"
+  tol={0.05}
+  q="One 8192 × 8192 layer at batch 1 on the A100: how many times faster is INT4 (one scale per 128 weights) than BF16?"
+  href="#k-batch"
+  more="The batch sweep"
+>
+  <V v="ch11.int4Speedup.b1" fmt="num" />, a little under 4: at batch 1 the
+  layer is memory-bound, so time follows bytes: the INT4 weights and their
+  16-bit scales are <V of="a100.quant.int4.1.weight_bytes" fmt="bytes" />
+  against <V of="a100.quant.bf16.1.weight_bytes" fmt="bytes" /> in BF16.
+</Check>
+
+<Check
+  id="k11-q2"
+  n={2}
+  choices={[
+    "About 4 times faster than BF16",
+    "The same speed as BF16",
+    "Slower than BF16, in the model",
+  ]}
+  answer={1}
+  q="At batch 1024 on the A100, the INT4 weight-only kernel is:"
+  href="#k-compute-bound"
+  more="When the layer is compute-bound"
+>
+  The same speed: by then the layer is compute-bound, and W4A16 still does its
+  maths in BF16 on the same tensor cores. (Real kernels lose a little more to
+  the unpacking.)
+</Check>
+
+<Check
+  id="k11-q3"
+  n={3}
+  input="number"
+  v="ch11.w8a8Speedup.b1024"
+  tol={0.05}
+  q="And W8A8 at batch 1024: how many times faster than BF16?"
+  href="#k-compute-bound"
+  more="When the layer is compute-bound"
+>
+  <V v="ch11.w8a8Speedup.b1024" fmt="num" /> times: its maths runs on the INT8
+  tensor cores, <V of="a100.peak_int8_tensor" fmt="flops" /> dense on the A100,
+  twice the BF16 rate.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Batch-1 decode is memory-bound: fewer bits per weight make it nearly proportionally faster.
+- Weights are dequantised in registers just before the multiply-add; the BF16 weights are never written.
+- Once a layer is compute-bound, only narrower maths (INT8 or FP8 tensor cores) is faster.
+- Weight quantisation is a small-batch win; what it costs in accuracy is [Numerics Explained](https://numerics-explained.vercel.app/learn).
+
+<Keep>
+  INT4 with a 16-bit scale per 128 weights is 0.516 bytes per weight: 3.88 times
+  fewer than BF16.
+</Keep>
+
+</Remember>

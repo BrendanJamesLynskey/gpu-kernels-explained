@@ -9,7 +9,11 @@
 
 A GPU runs threads in groups of 32 called **warps**. A warp issues one instruction at a time for all of its threads, which the CUDA Programming Guide calls **SIMT**, single instruction, multiple threads: "full efficiency is realized when all 32 threads of a warp agree on their execution path."
 
+<span id="k-diverge" />
+
 When they do not agree, at an `if` whose condition differs between lanes, the warp **diverges**: "the warp executes each branch path taken, disabling threads that are not on that path." In the animation, each row is one issued instruction. With `i < 8`, lanes 0–7 run the if-path while lanes 8–31 sit masked off (hatched); then lanes 8–31 run the else-path while 0–7 wait; then all 32 carry on together. Both paths cost the whole warp time.
+
+<span id="k-conditions" />
 
 Try the conditions:
 
@@ -17,6 +21,8 @@ Try the conditions:
 - **`i % k == 0`** spreads the active lanes out. With $k = 2$ the even and odd lanes take turns: half the warp idles at every branch instruction.
 - **`x[i] < k`** branches on data, here 32 pseudo-random values from 0 to 99 drawn by the model. Data-dependent branches are the usual source of divergence, and how much it costs depends on the data.
 - **`uniform`** branches on `blockIdx.x`, the same for every thread of a block: the warp never diverges, whatever the paths' lengths.
+
+<span id="k-within" />
 
 Divergence happens only _within_ a warp: "different warps execute independently." So a branch that splits threads at warp boundaries, multiples of 32, costs nothing extra.
 
@@ -73,3 +79,72 @@ for (let j = 0; j < lenC; j++) steps.push({ phase: "C", j, mask: FULL_MASK });
 - NVIDIA, CUDA Programming Guide: [SIMT architecture](https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html#simt-execution-model) and [independent thread scheduling](https://docs.nvidia.com/cuda/cuda-programming-guide/03-advanced/advanced-kernel-programming.html#independent-thread-scheduling).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k03-q1"
+  n={1}
+  input="number"
+  v="ch03.lt8.eff"
+  fmt="pct"
+  abs={4}
+  q="The default branch, i < 8: an if-path of 3 instructions, an else-path of 2, and 4 outside the branch. What SIMT efficiency, in per cent?"
+  href="#k-diverge"
+  more="Divergence"
+>
+  The warp issues all <V v="ch03.lt8.issued" fmt="int" /> instructions, both
+  paths, with the lanes not on a path masked off: $(128 + 24 + 48)/288$ of the
+  issue slots do useful work.
+</Check>
+
+<Check
+  id="k03-q2"
+  n={2}
+  choices={[
+    "The warp diverges as before",
+    "No divergence: all 32 lanes agree and the else-path is never issued",
+    "Half the lanes sit idle",
+  ]}
+  answer={1}
+  q="Change the condition to i < 64. What happens to the warp?"
+  href="#k-conditions"
+  more="Trying the conditions"
+>
+  With $k$ a multiple of 32 the whole warp takes the same path, so only that
+  path is issued: efficiency <V v="ch03.lt64.eff" fmt="pct" />.
+</Check>
+
+<Check
+  id="k03-q3"
+  n={3}
+  choices={[
+    "Yes: both paths are issued",
+    "No: every thread of a block takes the same path",
+    "Only on Volta and later GPUs",
+  ]}
+  answer={1}
+  q="A branch on blockIdx.x, with one path much longer than the other. Does the warp diverge?"
+  href="#k-within"
+  more="Divergence within a warp"
+>
+  No. `blockIdx.x` is the same for every thread of a block, so a warp never
+  disagrees with itself, whatever the paths' lengths. Divergence happens only
+  within a warp.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- A warp is 32 threads issuing one instruction stream (SIMT).
+- A branch the lanes disagree on issues both paths with lanes masked: each path costs the whole warp's time.
+- Divergence happens only within a warp: branch on multiples of 32 and it costs nothing extra.
+- Independent thread scheduling (Volta and later) changes the order of the paths, not their cost.
+
+<Keep>
+  $\eta$ = active lanes ÷ (32 × issued instructions):
+  <V v="ch03.lt8.eff" fmt="pct" /> for the default `i < 8` branch.
+</Keep>
+
+</Remember>

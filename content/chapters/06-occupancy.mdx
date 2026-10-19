@@ -7,14 +7,20 @@
 
 <Layer kind="concept">
 
+<span id="k-occupancy" />
+
 An SM keeps many warps resident at once and switches between them every cycle: while one waits hundreds of cycles for memory ([chapter 1](/learn/01-memory-hierarchy)'s latencies), the others compute. **Occupancy** is "the ratio of the number of active warps to the maximum number of active warps supported by the SM" (CUDA Programming Guide §2.3.7). On the A100 and H100 the maximum is 64 warps (2,048 threads) per SM.
 
 How many warps fit depends on what each block asks for. The scheduler places a block on an SM only if the SM still has room for all of it: its **warp slots**, its **registers** (the SM has 65,536), its **shared memory** (up to <V of="a100.smem_per_sm" fmt="kib" /> on the A100, <V of="h100.smem_per_sm" fmt="kib" /> on the H100) and one of the 32 **block slots**. The animation places blocks one at a time until the next one does not fit; the resource that ran out is the **limiter**.
+
+<span id="k-examples" />
 
 Try the guide's two examples on the A100 (shared memory at 0):
 
 - **768 threads per block**: two blocks use 48 of 64 warp slots, and a third would need 72. Occupancy 75%.
 - **32 threads per block**: each block is one warp, so the 32-block limit stops the SM at 32 warps. Occupancy 50%.
+
+<span id="k-registers" />
 
 Then raise the registers: at 64 registers per thread, 256-thread blocks stop at 4 blocks (32 warps, 50%). Add 48 KB of shared memory and only 3 fit on the A100 (37.5%), while the H100's larger shared memory still takes 4.
 
@@ -61,3 +67,71 @@ const regsAssumed = regsPerWarp * roundUp(warpsPerBlock, p.sub_partitions);
 - NVIDIA, CUDA Programming Guide: [kernel launch and occupancy](https://docs.nvidia.com/cuda/cuda-programming-guide/02-basics/writing-cuda-kernels.html#kernel-launch-and-occupancy) and [compute capabilities](https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k06-q1"
+  n={1}
+  input="number"
+  v="ch06.t768"
+  fmt="pct"
+  abs={2}
+  q="Blocks of 768 threads on the A100, no shared memory. What occupancy, in per cent?"
+  href="#k-examples"
+  more="The guide's two examples"
+>
+  Two blocks use 48 of the 64 warp slots and a third would need 72, so the warp
+  slots stop it at <V v="ch06.t768" fmt="pct" />.
+</Check>
+
+<Check
+  id="k06-q2"
+  n={2}
+  input="number"
+  v="ch06.t32"
+  fmt="pct"
+  abs={2}
+  q="Blocks of 32 threads (one warp each). What occupancy now?"
+  href="#k-examples"
+  more="The guide's two examples"
+>
+  <V v="ch06.t32" fmt="pct" />, not 100%: an SM holds at most 32 blocks, so
+  one-warp blocks stop at 32 of the 64 warps.
+</Check>
+
+<Check
+  id="k06-q3"
+  n={3}
+  choices={[
+    "The warp slots",
+    "The registers",
+    "Shared memory",
+    "The 32-block limit",
+  ]}
+  answer={2}
+  q="256 threads, 64 registers per thread and 48 KB of shared memory per block, on the A100. What limits occupancy?"
+  href="#k-registers"
+  more="Registers and shared memory"
+>
+  Shared memory: each block is allocated 49 KB with the driver's reserve, and
+  only 3 fit, 24 of the 64 warps. The registers alone would allow 4 blocks. On
+  the H100, whose shared memory is larger, 4 fit: occupancy
+  <V v="ch06.t256r64s48.h100" fmt="pct" />.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Occupancy is active warps ÷ the SM's maximum, 64 on the A100 and H100.
+- A block is placed only if warp slots, registers, shared memory and a block slot all have room; the first to run out is the limiter.
+- Tiny blocks hit the 32-block limit before anything else.
+- High occupancy is a means: instruction-level parallelism can hide latency with fewer warps.
+
+<Keep>
+  $B = \min(B_{\text{warps}}, B_{\text{regs}}, B_{\text{smem}}, 32)$ blocks;
+  occupancy $= B\,w/64$.
+</Keep>
+
+</Remember>

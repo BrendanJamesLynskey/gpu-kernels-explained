@@ -3,7 +3,8 @@
  * and FPGA work, linked from every Hardware-track landing page (brief 42).
  * The same file on Kernels, Systolic, Accelerators and Racks. The decoder's
  * figures are quoted from its README's Vivado table (they are the author's
- * synthesis runs, not this site's). Server Component, no client code.
+ * synthesis runs, not this site's). The first link is the portfolio home
+ * (brief 44). Server Component, no client code.
  */
 const LINK =
   "focus-ring rounded underline decoration-accent/40 underline-offset-4 hover:decoration-accent";
@@ -12,6 +13,11 @@ const GH = "https://github.com/BrendanJamesLynskey";
 const PAGES = "https://brendanjameslynskey.github.io";
 
 const ITEMS: { href: string; label: string; text: string }[] = [
+  {
+    href: `${PAGES}/`,
+    label: "The author's portfolio",
+    text: "Everything in one place: the hardware work, the explainer sites, the deck series and how every number is checked.",
+  },
   {
     href: `${GH}/LLM_Transformer_Decoder_RTL`,
     label: "A transformer decoder in RTL",

@@ -7,12 +7,16 @@
 
 <Layer kind="concept">
 
+<span id="k-tree" />
+
 Summing an array looks serial, but addition is associative, so a block can add its values as a **tree**: half the threads each add one pair, then a quarter, and so on, $\log_2 n$ steps for $n$ values, with a `__syncthreads()` between steps so every thread sees the previous step's sums. The animation sums 64 numbers with one block of 64 threads, which is two warps, four ways. They are the first three kernels of Mark Harris's classic "Optimizing Parallel Reduction in CUDA", then the warp-shuffle version that later CUDA made possible.
 
 1. **Divergent** (`if (tid % (2*s) == 0)`): the threads that work are spread out, every other one, then every fourth... Both warps keep running at every step with most lanes masked off ([chapter 3](/learn/03-warps-and-divergence)): the hatched cells.
 2. **Strided index** (`i = 2*s*tid`): the working threads are now packed at the front, so whole warps drop out together and divergence is gone. But thread $t$ now touches word $2st$, a stride of $2s$ words, and the reads collide in the banks: a 2-way conflict at every step ([chapter 5](/learn/05-bank-conflicts)).
 3. **Sequential addressing** (`if (tid < s) x[tid] += x[tid + s]`, with $s$ halving): threads read consecutive words (no conflicts) and the working threads are packed at the front (no divergence beyond the last warp). The first step adds the second warp's values onto the first's.
 4. **Warp shuffle**: inside a warp, `__shfl_down_sync` reads another lane's register directly. Five shuffles (by 16, 8, 4, 2, 1) sum a warp's 32 values with no shared memory and no `__syncthreads()`; then lane 0 of each warp writes one value, and thread 0 adds the warps' sums.
+
+<span id="k-counters" />
 
 Watch the counters: the three tree versions all make <V of="a100.reduce.sequential.smem" fmt="int" /> shared-memory accesses and 6 barriers; the shuffle version makes 4 and 1.
 
@@ -60,6 +64,8 @@ __device__ float warp_sum(float v) {
 
 </Layer>
 
+<span id="k-table" />
+
 ## The four versions, counted (model)
 
 | Version                | Shared-memory accesses                           | `__syncthreads()`                                 | Worst bank conflict | Divergent warps (first step) |
@@ -77,3 +83,70 @@ __device__ float warp_sum(float v) {
 - NVIDIA technical blog, [Using CUDA warp-level primitives](https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k08-q1"
+  n={1}
+  input="number"
+  of="a100.reduce.sequential.smem"
+  fmt="int"
+  q="Summing 64 values with a block of 64 threads: how many shared-memory accesses does a tree version make?"
+  href="#k-counters"
+  more="The counters"
+>
+  <V of="a100.reduce.sequential.smem" fmt="int" />, the same for all three tree
+  versions: they differ in which threads work and which banks they hit, not in
+  how much they read and write.
+</Check>
+
+<Check
+  id="k08-q2"
+  n={2}
+  input="number"
+  of="a100.reduce.shuffle.syncs"
+  fmt="int"
+  tol={0}
+  q="And the warp-shuffle version: how many __syncthreads() barriers?"
+  href="#k-tree"
+  more="The four versions"
+>
+  <V of="a100.reduce.shuffle.syncs" fmt="int" />, against
+  <V of="a100.reduce.sequential.syncs" fmt="int" /> for the tree. Shuffles move
+  values between the registers of one warp, which needs no barrier; one is
+  needed before thread 0 adds the warps' sums.
+</Check>
+
+<Check
+  id="k08-q3"
+  n={3}
+  choices={[
+    "More barriers",
+    "A 2-way bank conflict at every step",
+    "More additions",
+  ]}
+  answer={1}
+  q="Strided indexing (i = 2·s·tid) packed the working threads together and removed the divergence. What did it cost?"
+  href="#k-table"
+  more="The four versions, counted"
+>
+  A 2-way bank conflict: thread $t$ touches word $2st$, so two active lanes
+  share each bank. Sequential addressing fixes both problems.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- A tree reduction takes $\log_2 n$ steps and $n - 1$ additions, with a barrier between steps.
+- Divergent, then strided, then sequential addressing: first the divergence goes, then the bank conflicts.
+- Warp shuffles sum 32 values register to register, with no shared memory and no barrier.
+- Reductions are bound by bandwidth and latency, so fewer round trips matter more than fewer flops.
+
+<Keep>
+  Five shuffles, by 16, 8, 4, 2 and 1, sum a warp's 32 values
+  (`__shfl_down_sync`).
+</Keep>
+
+</Remember>

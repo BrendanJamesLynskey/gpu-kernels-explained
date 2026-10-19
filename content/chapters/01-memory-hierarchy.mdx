@@ -9,7 +9,11 @@
 
 A GPU keeps data at four levels, and each level is a trade: the closer it sits to the arithmetic, the faster and the smaller it is. **Registers** hold each thread's working values. **Shared memory** is a scratchpad on each streaming multiprocessor (SM), shared by the threads of a block. The **L2 cache** is shared by every SM. **HBM**, the stacked DRAM beside the die, holds everything else.
 
+<span id="k-levels" />
+
 On the A100 the four levels deliver, in turn, <V of="a100.bw.reg" fmt="rate" />, <V of="a100.bw.smem" fmt="rate" />, <V of="a100.bw.l2" fmt="rate" /> and <V of="a100.bw.hbm" fmt="rate" />. That is a factor of about <V of="a100.ridge_fp32" fmt="num" /> between the rate the FP32 units can do arithmetic and the rate HBM can feed them, in flops per byte: a kernel that does less work than that on each byte it fetches will wait on memory.
+
+<span id="k-three-kernels" />
 
 The animation runs three kernels through the model. The pipes are drawn to scale, so the HBM pipe is a thread beside the register pipe. Packets move at the rate each level is actually used:
 
@@ -89,3 +93,71 @@ Sizes are from NVIDIA's A100 whitepaper (Tables 4 and 5); latencies were measure
 - NVIDIA, [A100 Tensor Core GPU Architecture](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/nvidia-ampere-architecture-whitepaper.pdf) (whitepaper).
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k01-q1"
+  n={1}
+  input="number"
+  v="ch01.smemOverHbm"
+  q="On the A100, how many times more bytes per second does shared memory deliver than HBM?"
+  href="#k-levels"
+  more="The four levels"
+>
+  Shared memory delivers <V of="a100.bw.smem" fmt="rate" /> across the GPU and
+  HBM <V of="a100.bw.hbm" fmt="rate" />. Every rung up the ladder is roughly an
+  order of magnitude, which is why kernels work so hard to serve operands from
+  on chip.
+</Check>
+
+<Check
+  id="k01-q2"
+  n={2}
+  input="slider"
+  min={0}
+  max={100}
+  step={1}
+  of="a100.kernels.vecadd.compute_util"
+  fmt="pct"
+  abs={3}
+  q="Vector add on the A100: for what share of the run are the FP32 units busy?"
+  href="#k-three-kernels"
+  more="The three kernels"
+>
+  About <V of="a100.kernels.vecadd.compute_util" fmt="pct" />: one addition for
+  every 12 bytes moved, so HBM sets the pace (
+  <V of="a100.kernels.vecadd.total" fmt="time" />) and the ALUs wait almost all
+  the time.
+</Check>
+
+<Check
+  id="k01-q3"
+  n={3}
+  choices={["The FP32 units, as on the A100", "Shared memory", "HBM"]}
+  answer={1}
+  q="Move the 128 × 128 register-blocked GEMM from the A100 to the H100. What limits it there?"
+  href="#k-three-kernels"
+  more="The three kernels"
+>
+  Shared memory. The H100's SM has twice the A100's FP32 units but the same 32
+  banks of shared memory, so the ALUs get faster and the operand supply does
+  not: the bottleneck moves back down a rung.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Four levels: registers, shared memory, L2, HBM. The closer to the ALUs, the faster and the smaller.
+- A kernel takes as long as its slowest level, or the ALUs: find the bottleneck first.
+- Each optimisation moves the bottleneck one rung up the ladder, from HBM towards the ALUs.
+- Latency is hidden by keeping many warps resident ([chapter 6](/learn/06-occupancy)).
+
+<Keep>
+  The A100's FP32 units can do about <V of="a100.ridge_fp32" fmt="num" /> flops
+  for every byte HBM delivers: a kernel that does less work per byte waits on
+  memory.
+</Keep>
+
+</Remember>

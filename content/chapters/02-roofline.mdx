@@ -7,11 +7,17 @@
 
 <Layer kind="concept">
 
+<span id="k-ridge" />
+
 [Chapter 1](/learn/01-memory-hierarchy) found each kernel's slowest level. The **roofline** (Williams, Waterman and Patterson, 2009) turns the most common case, HBM against the ALUs, into one picture. Put a kernel's **arithmetic intensity** $I$, the flops it does per byte it moves from HBM, on the horizontal axis. Then the best it can do is either limited by the bandwidth (the sloped line: each byte delivered allows $I$ flops) or by the peak (the flat roof). The two meet at the **ridge point**: <V of="a100.ridge_fp32" fmt="ai" /> for the A100's FP32 units, <V of="h100.ridge_fp32" fmt="ai" /> for the H100's.
+
+<span id="k-sweep" />
 
 The animation steps a 4096 × 4096 × 4096 FP32 matrix multiply through tile sizes from 1 to 128. Every block of $b \times b$ outputs loads its $b$ rows of A and $b$ columns of B once and reuses each value $b$ times, so the intensity grows with the tile: about $b/4$ flops per byte. With 1×1 tiles the kernel manages <V of="a100.sweep.1.perf" fmt="flops" />; with 32×32 tiles, <V of="a100.sweep.32.perf" fmt="flops" />, still on the slope; at 64×64 it passes the A100's ridge and meets the FP32 roof. On the H100, whose ridge sits further right, it takes 128×128.
 
 The dashed roof is the BF16 tensor cores, about 16 (A100) or 15 (H100) times higher than FP32. Its ridge is at <V of="a100.ridge_tensor" fmt="ai" /> on the A100: tensor-core kernels need far more reuse before they stop waiting on memory. That is why the GEMM chapter's last step, and FlashAttention, are about keeping tiles on chip. A B200 (the GPU of a GB200 NVL72) moves it to <V of="tc.b200.ridge.bf16" fmt="num" /> flops per byte in BF16 and <V of="tc.b200.ridge.fp4" fmt="num" /> in NVFP4: [chapter 12](/learn/12-hopper-and-blackwell-gemm) compares the three generations and shows how a Hopper or Blackwell kernel keeps its tensor cores fed.
+
+<span id="k-slide" />
 
 Slide the intensity yourself: below the ridge, every doubling of $I$ doubles the attainable speed; above it, nothing changes.
 
@@ -76,3 +82,63 @@ Batch-1 decoding in an LLM is a matrix-vector product: each weight is read once 
 - New to training? [Training, chapter 15: running a real job](https://transformer-training-explained.vercel.app/training/15-running-a-real-job) (the Training site, in the Foundations track): throughput and MFU, the share of the hardware's peak arithmetic a whole training step achieves.
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k02-q1"
+  n={1}
+  input="number"
+  of="a100.ridge_fp32"
+  fmt="ai"
+  q="What is the A100's FP32 ridge point, in flops per byte of HBM traffic?"
+  href="#k-ridge"
+  more="The ridge point"
+>
+  The peak over the bandwidth: 19.5 TFLOP/s over{" "}
+  <V of="a100.bw.hbm" fmt="rate" />. Below it a kernel is memory-bound; above
+  it, compute-bound.
+</Check>
+
+<Check
+  id="k02-q2"
+  n={2}
+  choices={["32 × 32", "64 × 64", "128 × 128"]}
+  answer={2}
+  q="In the 4096³ FP32 sweep, what is the smallest power-of-two tile that reaches the H100's FP32 roof?"
+  href="#k-sweep"
+  more="The tile sweep"
+>
+  128 × 128. The intensity is about $b/4$, and the H100's ridge is
+  <V of="h100.ridge_fp32" fmt="ai" />, so the tile must be about 80 wide; the
+  A100's lower ridge is reached at 64 × 64.
+</Check>
+
+<Check
+  id="k02-q3"
+  n={3}
+  choices={["It doubles", "It stays the same", "It halves"]}
+  answer={1}
+  q="A kernel sits well to the right of the ridge. You double its arithmetic intensity. What happens to its attainable speed?"
+  href="#k-slide"
+  more="Sliding the intensity"
+>
+  Nothing: above the ridge $P(I) = P$, the flat roof. More reuse pays only below
+  the ridge, where every doubling of $I$ doubles the speed.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Arithmetic intensity is flops per byte moved from HBM.
+- $P(I) = \min(P, W I)$: the slope is memory-bound, the flat roof compute-bound.
+- The ridge $I^* = P/W$ is where they meet; tensor cores raise the roof about 16 times, so they need about 16 times the reuse.
+- Batch-1 decode does about 1 flop per byte: far down the slope.
+
+<Keep>
+  Ridge = peak ÷ bandwidth: <V of="a100.ridge_fp32" fmt="ai" /> for the A100's
+  FP32 units, <V of="a100.ridge_tensor" fmt="ai" /> for its BF16 tensor cores.
+</Keep>
+
+</Remember>

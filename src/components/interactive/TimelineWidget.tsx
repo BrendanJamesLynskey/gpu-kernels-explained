@@ -17,17 +17,10 @@ import { useSvgFont } from "@/components/viz/useSvgFont";
 import { pct, trim } from "@/lib/format";
 import { timelineCaption } from "@/lib/gpu/captions";
 import { tileTimeline, timelineSteps } from "@/lib/gpu/model";
+import { SCENARIOS, type Scenario } from "@/lib/gpu/scenarios";
 import { LEVEL_COLOUR, MUTED, STATE_COLOUR } from "@/lib/viz/palette";
 
 import { Hatch } from "./Hatch";
-
-/** Scenarios: tiles, then load, compute and store times per tile. */
-export const SCENARIOS = {
-  compute: { label: "compute-heavy", args: [6, 2.0, 3.0, 1.0] },
-  copy: { label: "copy-heavy", args: [6, 3.0, 1.5, 1.0] },
-  balanced: { label: "balanced", args: [6, 1.0, 1.0, 1.0] },
-} as const;
-export type Scenario = keyof typeof SCENARIOS;
 
 const W = 320;
 const LEFT = 58;

@@ -7,7 +7,11 @@
 
 <Layer kind="concept">
 
+<span id="k-standard" />
+
 Attention computes $S = QK^\top$ (an $N \times N$ matrix of scores for a sequence of $N$ tokens), takes a softmax along each row to get $P$, and returns $O = PV$. Done as three separate kernels, **standard attention** writes $S$ to HBM, reads it back for the softmax, writes $P$, and reads it again for the product: four passes over $N^2$ numbers. At $N = 4096$ and head dimension 64 that is <V of="a100.attn.n4096_d64_b128.standard" fmt="bytes" /> for one head, almost all of it the score matrix.
+
+<span id="k-flash" />
 
 **FlashAttention** (Dao et al., 2022) never stores $S$. It takes a block of $B_r$ queries, streams the keys and values past in blocks of $B_c$, and for each pair computes the $B_r \times B_c$ score tile on chip, folds it into a running output, and discards it. The animation is FlashAttention-2's loop order (Dao, 2023): one row of tiles per query block. What goes to and from HBM is $Q$ and $O$ once, and $K$ and $V$ once per query block, between <V of="a100.attn.n4096_d64_b128.compulsory" fmt="bytes" /> (if every re-read of $K$ and $V$ hits L2, the "K and V from L2" bar) and <V of="a100.attn.n4096_d64_b128.flash" fmt="bytes" /> (if none does) at the same size.
 
@@ -23,6 +27,8 @@ The obstacle is the softmax: each output row needs $\sum_j e^{s_j}$ over the _wh
 </SoftmaxWidget>
 
 <Layer kind="concept">
+
+<span id="k-online" />
 
 A safe softmax subtracts the row's maximum before exponentiating, so nothing overflows: $p_i = e^{x_i - m} / \sum_j e^{x_j - m}$. That seems to need two passes (find $m$, then sum), and a third to normalise. Milakov and Gimelshein (2018) showed that one pass is enough: keep a running maximum $m$ and a running sum $\ell$ of $e^{x - m}$. When a new block brings a larger maximum $m'$, every term already in $\ell$ was computed against the old $m$ and is too large by $e^{m' - m}$, the same factor for all of them, so multiplying $\ell$ by $e^{m - m'}$ fixes them all at once. Step through the animation and watch the bars below the scores: they all shrink together when the maximum rises.
 
@@ -100,3 +106,69 @@ if (i === 0) once += 2 * eb * bc * d;
 - [LLM Inference Explained](https://llm-inference-explained.vercel.app/learn) covers attention's KV cache and why decode is memory-bound; the [Transformer Decoder Explainer](https://transformer-decoder-explained.vercel.app/) shows attention itself.
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k09-q1"
+  n={1}
+  input="number"
+  of="a100.attn.n4096_d64_b128.standard"
+  fmt="bytes"
+  q="Standard attention for one head, N = 4096 and d = 64 in BF16: how many megabytes does it move to and from HBM?"
+  href="#k-standard"
+  more="Standard attention"
+>
+  <V of="a100.attn.n4096_d64_b128.standard" fmt="bytes" />, almost all of it the
+  $N \times N$ score matrix written and read twice ($4N^2$ values), not the $Q$,
+  $K$, $V$ and $O$ themselves.
+</Check>
+
+<Check
+  id="k09-q2"
+  n={2}
+  input="number"
+  v="ch09.stdOverFlash"
+  q="FlashAttention-2 at the same size, blocks of 128, with no L2 reuse: how many times fewer HBM bytes than standard attention?"
+  href="#k-flash"
+  more="FlashAttention"
+>
+  Only about <V v="ch09.stdOverFlash" fmt="num" /> times: it reads $K$ and $V$
+  once per query block. If those re-reads hit L2 it falls to
+  <V of="a100.attn.n4096_d64_b128.compulsory" fmt="bytes" />, every value moved
+  once.
+</Check>
+
+<Check
+  id="k09-q3"
+  n={3}
+  choices={[
+    "It is recomputed from the start of the row",
+    "It is multiplied by e^(m − m′), then the block's terms are added",
+    "Nothing: the old terms are kept as they are",
+  ]}
+  answer={1}
+  q="A new block of scores brings a larger maximum m′. What happens to the running sum ℓ?"
+  href="#k-online"
+  more="Online softmax"
+>
+  Every term already in $\ell$ was computed against the old maximum and is too
+  large by the same factor, so one multiplication by $e^{m - m'}$ fixes them
+  all: one pass is enough, and the result is exact.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Standard attention writes and reads the $N \times N$ score matrix: its traffic grows as $N^2$.
+- FlashAttention computes score tiles on chip and never stores $S$.
+- Online softmax keeps a running maximum and sum, rescaled by $e^{m - m'}$: exact, in one pass.
+- With $K$ and $V$ re-reads served from L2, the floor is every value moved once, $4eNd$ bytes.
+
+<Keep>
+  $\ell' = \ell \cdot e^{m - m'} + \sum_j e^{x_j - m'}$: the one line that lets
+  attention stream.
+</Keep>
+
+</Remember>

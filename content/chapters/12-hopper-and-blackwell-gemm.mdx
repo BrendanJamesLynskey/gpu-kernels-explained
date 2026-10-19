@@ -13,7 +13,11 @@
 - **`wgmma`** (Hopper) is issued by a warpgroup of four warps and runs asynchronously; B must come from shared memory, A from registers or shared memory, and the accumulators stay in the warpgroup's registers.
 - **`tcgen05.mma`** (Blackwell) is issued by **one thread** (PTX ISA Table 55), reads its operands from shared memory (A may be in Tensor Memory) and accumulates in **Tensor Memory** (TMEM): a dedicated <V of="tc.b200.tmem_per_sm" fmt="kib" /> per SM, 512 columns by 128 lanes of 32-bit cells, next to the tensor cores. With `cta_group::2` one thread of a pair of CTAs on neighbouring SMs starts an MMA that uses both SMs' tensor cores.
 
+<span id="k-warp-spec" />
+
 So a kernel splits its warps by role, which is called **warp specialisation**. A producer warp does nothing but issue TMA loads into a ring of shared-memory **stages**; the MMA issuer waits for a stage to fill, multiplies it and releases it; an epilogue reads finished accumulators, converts them and stores C. Two barriers per stage (full, empty) hand the slots back and forth. The animation runs that loop for one CTA: <V of="tc.pipe.default.params.tiles" fmt="int" /> output tiles of <V of="tc.pipe.default.params.ksteps" fmt="int" /> K-slices each.
+
+<span id="k-defaults" />
 
 With the defaults (four stages, two accumulator buffers in TMEM) the tensor core starts as soon as the first load lands and never waits again: busy <V of="tc.pipe.default.util" fmt="pct" /> of the run, the rest being the first load and the last epilogue. Cut the ring to **one** stage and every load is exposed: <V of="tc.pipe.s1.util" fmt="pct" />. Two stages give <V of="tc.pipe.s2.util" fmt="pct" />, three <V of="tc.pipe.s3.util" fmt="pct" />. Set the accumulators to **1 (registers)**, the Hopper case with one consumer warpgroup, and each tile's MMAs wait for the previous tile's epilogue: <V of="tc.pipe.acc1.total" fmt="int" /> time units instead of <V of="tc.pipe.default.total" fmt="int" />. Two accumulator buffers let the epilogue drain one while the tensor core fills the other; Hopper kernels get the same effect with two consumer warpgroups taking turns ("ping-pong"), Blackwell's TMEM holds both accumulators without spending registers. With a long epilogue (set it to 30, longer than a tile's <V of="tc.pipe.default.params.ksteps" fmt="int" /> slices of MMA) even two buffers expose some of it: <V of="tc.pipe.epi30.total" fmt="int" /> units, against <V of="tc.pipe.epi30acc1.total" fmt="int" /> with one.
 
@@ -26,6 +30,8 @@ The times are integers in illustrative units (an MMA slice takes <V of="tc.pipe.
 </Callout>
 
 <Layer kind="concept">
+
+<span id="k-stages" />
 
 **How many stages fit.** A stage holds one K-slice of A and of B. For a 128 × 256 output tile with 64-deep BF16 slices that is <V of="tc.stageBytes" fmt="kib" />, so the B200's <V of="tc.b200.smem_per_sm" fmt="kib" /> of shared memory per SM (compute capability 10.0) holds <V of="tc.b200.stages" fmt="int" /> stages, the H100's <V of="tc.h100.stages" fmt="int" /> and the A100's <V of="tc.a100.stages" fmt="int" />. The steady-state equation says how many are needed: enough that $S$ slices of MMA cover one load's latency plus its MMA. Below that the ring runs dry and the tensor core idles (the hatched gaps); above it, extra stages buy nothing. On Blackwell the accumulators no longer compete with the stages for space: they live in TMEM, and the registers are left for the epilogue.
 
@@ -115,3 +121,77 @@ if (warp == PRODUCER && lane == 0) {          // one thread issues every load
 - [Systolic Arrays Explained, chapter 8](https://systolic-arrays-explained.vercel.app/learn/08-other-ways): tensor cores against systolic arrays; a single-thread MMA into dedicated accumulator memory is a step towards the systolic side.
 
 </Callout>
+
+<CheckYourself>
+
+<Check
+  id="k12-q1"
+  n={1}
+  input="slider"
+  min={0}
+  max={100}
+  step={1}
+  of="tc.pipe.s1.util"
+  fmt="pct"
+  abs={4}
+  q="Cut the ring to one stage. For what share of the run is the tensor core busy?"
+  href="#k-defaults"
+  more="The pipeline's defaults"
+>
+  <V of="tc.pipe.s1.util" fmt="pct" />: with one stage every load is exposed.
+  The default four stages keep it busy <V of="tc.pipe.default.util" fmt="pct" />
+  of the run, the rest being the first load and the last epilogue.
+</Check>
+
+<Check
+  id="k12-q2"
+  n={2}
+  input="number"
+  of="tc.b200.stages"
+  fmt="int"
+  tol={0}
+  q="How many stages of a 128 × 256 output tile with 64-deep BF16 slices fit in a B200 SM's shared memory?"
+  href="#k-stages"
+  more="How many stages fit"
+>
+  <V of="tc.b200.stages" fmt="int" />: one stage is
+  <V of="tc.stageBytes" fmt="kib" /> and the SM has
+  <V of="tc.b200.smem_per_sm" fmt="kib" />. The H100 also holds
+  <V of="tc.h100.stages" fmt="int" /> and the A100{" "}
+  <V of="tc.a100.stages" fmt="int" />.
+</Check>
+
+<Check
+  id="k12-q3"
+  n={3}
+  choices={[
+    "The run is just as fast",
+    "Each tile's MMAs wait for the previous tile's epilogue, so the run is longer",
+    "The tensor core never waits",
+  ]}
+  answer={1}
+  q="Use one accumulator buffer in registers (the Hopper case with one consumer warpgroup) instead of two in Tensor Memory. What happens?"
+  href="#k-warp-spec"
+  more="Warp specialisation"
+>
+  The run is longer: <V of="tc.pipe.acc1.total" fmt="int" /> time units against
+  <V of="tc.pipe.default.total" fmt="int" />. A second buffer lets the epilogue
+  drain one accumulator while the tensor core fills the other.
+</Check>
+
+</CheckYourself>
+
+<Remember>
+
+- Hopper and Blackwell give each job its own engine: TMA loads, a single-thread MMA issuer, an epilogue.
+- Warp specialisation: a producer fills a ring of shared-memory stages, and two barriers per stage hand the slots back and forth.
+- Enough stages cover one load's latency plus its MMA: $S \ge (t_{\text{load}} + t_{\text{mma}})/t_{\text{mma}}$.
+- Two accumulator buffers (in Tensor Memory on Blackwell) hide the epilogue.
+- The ridge rises every generation, and each narrower format doubles it.
+
+<Keep>
+  The B200's ridge is <V of="tc.b200.ridge.bf16" fmt="num" /> flops per byte in
+  BF16 and <V of="tc.b200.ridge.fp4" fmt="num" /> in NVFP4.
+</Keep>
+
+</Remember>
