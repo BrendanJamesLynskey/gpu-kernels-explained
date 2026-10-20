@@ -148,4 +148,9 @@ test("the Hardware start page: reading order, prerequisites, glossary", async ({
   expect(
     await page.locator("[data-track-glossary] dt a").count(),
   ).toBeGreaterThanOrEqual(30);
+  // the shared definitions (brief 44D)
+  await expect(page.locator("a[data-definitions-link]")).toHaveAttribute(
+    "href",
+    "https://agent-harnesses-explained.vercel.app/definitions",
+  );
 });
