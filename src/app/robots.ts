@@ -9,7 +9,14 @@ import { SITE_URL } from "@/lib/site";
 export const dynamic = "force-static";
 
 /** Crawlers seen hammering the site in the firewall logs; none of them send readers. */
-const BLOCKED = ["SemrushBot", "AhrefsBot", "MJ12bot", "Bytespider", "PetalBot", "ExaBot"];
+const BLOCKED = [
+  "SemrushBot",
+  "AhrefsBot",
+  "MJ12bot",
+  "Bytespider",
+  "PetalBot",
+  "ExaBot",
+];
 
 export default function robots(): MetadataRoute.Robots {
   return {
