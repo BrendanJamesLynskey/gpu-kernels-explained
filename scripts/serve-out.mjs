@@ -5,10 +5,18 @@
  */
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
+import { readFileSync, existsSync } from "node:fs";
 import { join, extname, normalize, resolve } from "node:path";
 
 const ROOT = resolve(process.env.OUT_DIR ?? "out");
-const PORT = Number(process.argv[2] ?? process.env.PORT ?? 3000);
+// Accept `[port]`, `-p <port>` and `--port <port>` (Lighthouse CI and Playwright call `pnpm start -p 3000`, as with `next start`).
+const args = process.argv.slice(2);
+const flag = args.findIndex((a) => a === "-p" || a === "--port");
+const PORT = Number(
+  (flag >= 0 ? args[flag + 1] : args.find((a) => /^\d+$/.test(a))) ??
+    process.env.PORT ??
+    3000,
+);
 const TYPES = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -27,6 +35,11 @@ const TYPES = {
   ".webp": "image/webp",
   ".mjs": "text/javascript; charset=utf-8",
 };
+
+// Exact-path redirects from vercel.json, as Vercel applies them (permanent -> 308, otherwise 307).
+const REDIRECTS = existsSync("vercel.json")
+  ? (JSON.parse(readFileSync("vercel.json", "utf8")).redirects ?? [])
+  : [];
 
 async function isFile(p) {
   try {
@@ -50,6 +63,14 @@ async function resolveFile(pathname) {
 
 createServer(async (req, res) => {
   const { pathname } = new URL(req.url ?? "/", "http://x");
+  const r = REDIRECTS.find((x) => x.source === pathname);
+  if (r) {
+    res.writeHead(r.permanent === false ? 307 : 308, {
+      location: r.destination,
+    });
+    res.end();
+    return;
+  }
   let file = await resolveFile(pathname);
   let status = 200;
   if (!file) {
@@ -71,5 +92,5 @@ createServer(async (req, res) => {
     res.end("Not found");
   }
 }).listen(PORT, () =>
-  console.log(`serving ${ROOT} on http://localhost:${PORT}`),
+  console.log(`Ready: serving ${ROOT} on http://localhost:${PORT}`),
 );
