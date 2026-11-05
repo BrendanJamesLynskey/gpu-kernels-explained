@@ -4,6 +4,7 @@
  *   node scripts/serve-out.mjs [port]      (PORT env also works; default 3000)
  */
 import { createServer } from "node:http";
+import { gzipSync } from "node:zlib";
 import { readFile, stat } from "node:fs/promises";
 import { readFileSync, existsSync } from "node:fs";
 import { join, extname, normalize, resolve } from "node:path";
@@ -81,12 +82,19 @@ createServer(async (req, res) => {
     const body = await readFile(file);
     // the extensionless OG/Twitter cards are given image/png by vercel.json "headers" on Vercel
     const card = /(opengraph|twitter)-image$/.test(file);
-    res.writeHead(status, {
-      "content-type": card
-        ? "image/png"
-        : (TYPES[extname(file)] ?? "application/octet-stream"),
-    });
-    res.end(body);
+    const type = card
+      ? "image/png"
+      : (TYPES[extname(file)] ?? "application/octet-stream");
+    // compress text and cache hashed assets, as Vercel does, so Lighthouse measures the site, not this server
+    const zip =
+      /gzip/.test(req.headers["accept-encoding"] ?? "") &&
+      /text|javascript|json|xml|svg|wasm/.test(type);
+    const headers = { "content-type": type };
+    if (pathname.startsWith("/_next/static/"))
+      headers["cache-control"] = "public, max-age=31536000, immutable";
+    if (zip) headers["content-encoding"] = "gzip";
+    res.writeHead(status, headers);
+    res.end(zip ? gzipSync(body) : body);
   } catch {
     res.writeHead(404, { "content-type": "text/plain" });
     res.end("Not found");
